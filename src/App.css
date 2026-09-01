@@ -1,38 +1,25 @@
-.App {
-  text-align: center;
-}
+* { box-sizing: border-box; }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
+.App { max-width: 1000px; margin: 0 auto; padding: 20px; }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
+.AppHeader { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.AppHeader h1 { margin: 0; font-size: 22px; }
+.stats { display: flex; gap: 20px; font-size: 14px; color: #555; }
 
-.App-link {
-  color: #61dafb;
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #ddd; }
+.tabs button {
+  padding: 8px 16px; border: none; background: none; cursor: pointer;
+  border-bottom: 2px solid transparent; font-size: 15px;
 }
+.tabs button.active { border-bottom-color: #2563eb; font-weight: 600; }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
+.panel { margin-bottom: 24px; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.inline-form input, .inline-form select { padding: 6px 8px; }
+.inline-form button { padding: 6px 12px; cursor: pointer; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+td button { margin-right: 6px; cursor: pointer; }
