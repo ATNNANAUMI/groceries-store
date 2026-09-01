@@ -1,21 +1,21 @@
 import { useState } from 'react';
+import { supabase } from '../supabaseClient';
 
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
-
-export default function Items({ items, setItems }) {
+export default function Items({ items, refreshItems }) {
   const [form, setForm] = useState({ name: '', price: '', stock: '' });
   const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   function resetForm() {
     setForm({ name: '', price: '', stock: '' });
     setEditingId(null);
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    setSaving(true);
+
     const payload = {
       name: form.name,
       price: parseFloat(form.price) || 0,
@@ -23,10 +23,18 @@ export default function Items({ items, setItems }) {
     };
 
     if (editingId) {
-      setItems(items.map(i => (i.id === editingId ? { ...i, ...payload } : i)));
+      const { error } = await supabase
+        .from('items')
+        .update(payload)
+        .eq('id', editingId);
+      if (error) console.error('Error updating item:', error.message);
     } else {
-      setItems([...items, { id: uid(), ...payload }]);
+      const { error } = await supabase.from('items').insert(payload);
+      if (error) console.error('Error adding item:', error.message);
     }
+
+    await refreshItems();
+    setSaving(false);
     resetForm();
   }
 
@@ -35,10 +43,11 @@ export default function Items({ items, setItems }) {
     setEditingId(item.id);
   }
 
-  function handleDelete(id) {
-    if (window.confirm('Delete this item?')) {
-      setItems(items.filter(i => i.id !== id));
-    }
+  async function handleDelete(id) {
+    if (!window.confirm('Delete this item?')) return;
+    const { error } = await supabase.from('items').delete().eq('id', id);
+    if (error) console.error('Error deleting item:', error.message);
+    await refreshItems();
   }
 
   return (
@@ -65,8 +74,14 @@ export default function Items({ items, setItems }) {
           value={form.stock}
           onChange={e => setForm({ ...form, stock: e.target.value })}
         />
-        <button type="submit">{editingId ? 'Save' : 'Add Item'}</button>
-        {editingId && <button type="button" onClick={resetForm}>Cancel</button>}
+        <button type="submit" disabled={saving}>
+          {editingId ? 'Save' : 'Add Item'}
+        </button>
+        {editingId && (
+          <button type="button" onClick={resetForm} disabled={saving}>
+            Cancel
+          </button>
+        )}
       </form>
 
       <table>
@@ -77,7 +92,7 @@ export default function Items({ items, setItems }) {
           {items.map(i => (
             <tr key={i.id}>
               <td>{i.name}</td>
-              <td>${i.price.toFixed(2)}</td>
+              <td>${Number(i.price).toFixed(2)}</td>
               <td>{i.stock}</td>
               <td>
                 <button onClick={() => handleEdit(i)}>Edit</button>

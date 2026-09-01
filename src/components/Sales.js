@@ -1,10 +1,7 @@
 import { useState, useMemo } from 'react';
+import { supabase } from '../supabaseClient';
 
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
-
-export default function Sales({ sales, setSales, buyers, items, setItems }) {
+export default function Sales({ sales, buyers, items, refreshSales, refreshItems }) {
   const [form, setForm] = useState({
     buyerId: '',
     itemId: '',
@@ -12,47 +9,57 @@ export default function Sales({ sales, setSales, buyers, items, setItems }) {
     date: new Date().toISOString().slice(0, 10),
   });
   const [buyerFilter, setBuyerFilter] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!form.buyerId || !form.itemId) return;
 
     const item = items.find(i => i.id === form.itemId);
-    const qty = parseInt(form.quantity, 10) || 1;
     if (!item) return;
 
-    const total = item.price * qty;
+    const qty = parseInt(form.quantity, 10) || 1;
+    const total = Number(item.price) * qty;
+    setSaving(true);
 
-    setSales([
-      ...sales,
-      {
-        id: uid(),
-        buyerId: form.buyerId,
-        itemId: form.itemId,
-        quantity: qty,
-        date: form.date,
-        total,
-      },
-    ]);
+    const { error: saleError } = await supabase.from('sales').insert({
+      buyer_id: form.buyerId,
+      item_id: form.itemId,
+      quantity: qty,
+      total,
+      sale_date: form.date,
+    });
 
-    // decrement stock
-    setItems(items.map(i => (i.id === item.id ? { ...i, stock: Math.max(0, i.stock - qty) } : i)));
+    if (saleError) {
+      console.error('Error recording sale:', saleError.message);
+      setSaving(false);
+      return;
+    }
 
+    const { error: stockError } = await supabase
+      .from('items')
+      .update({ stock: Math.max(0, item.stock - qty) })
+      .eq('id', item.id);
+
+    if (stockError) console.error('Error updating stock:', stockError.message);
+
+    await Promise.all([refreshSales(), refreshItems()]);
+    setSaving(false);
     setForm({ ...form, itemId: '', quantity: 1 });
   }
 
-  function handleDelete(id) {
-    if (window.confirm('Delete this sale record?')) {
-      setSales(sales.filter(s => s.id !== id));
-    }
+  async function handleDelete(id) {
+    if (!window.confirm('Delete this sale record?')) return;
+    const { error } = await supabase.from('sales').delete().eq('id', id);
+    if (error) console.error('Error deleting sale:', error.message);
+    await refreshSales();
   }
 
   const buyerName = id => buyers.find(b => b.id === id)?.name || 'Unknown';
   const itemName = id => items.find(i => i.id === id)?.name || 'Unknown';
 
   const filteredSales = useMemo(() => {
-    const sorted = [...sales].sort((a, b) => new Date(b.date) - new Date(a.date));
-    return buyerFilter ? sorted.filter(s => s.buyerId === buyerFilter) : sorted;
+    return buyerFilter ? sales.filter(s => s.buyer_id === buyerFilter) : sales;
   }, [sales, buyerFilter]);
 
   return (
@@ -79,7 +86,7 @@ export default function Sales({ sales, setSales, buyers, items, setItems }) {
           <option value="">Select item</option>
           {items.map(i => (
             <option key={i.id} value={i.id}>
-              {i.name} (${i.price.toFixed(2)}, stock: {i.stock})
+              {i.name} (${Number(i.price).toFixed(2)}, stock: {i.stock})
             </option>
           ))}
         </select>
@@ -97,7 +104,7 @@ export default function Sales({ sales, setSales, buyers, items, setItems }) {
           onChange={e => setForm({ ...form, date: e.target.value })}
         />
 
-        <button type="submit">Record Sale</button>
+        <button type="submit" disabled={saving}>Record Sale</button>
       </form>
 
       <h2>Sales History</h2>
@@ -115,11 +122,11 @@ export default function Sales({ sales, setSales, buyers, items, setItems }) {
         <tbody>
           {filteredSales.map(s => (
             <tr key={s.id}>
-              <td>{s.date}</td>
-              <td>{buyerName(s.buyerId)}</td>
-              <td>{itemName(s.itemId)}</td>
+              <td>{s.sale_date}</td>
+              <td>{buyerName(s.buyer_id)}</td>
+              <td>{itemName(s.item_id)}</td>
               <td>{s.quantity}</td>
-              <td>${s.total.toFixed(2)}</td>
+              <td>${Number(s.total).toFixed(2)}</td>
               <td><button onClick={() => handleDelete(s.id)}>Delete</button></td>
             </tr>
           ))}

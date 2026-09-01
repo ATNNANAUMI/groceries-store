@@ -1,39 +1,49 @@
 import { useState } from 'react';
+import { supabase } from '../supabaseClient';
 
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
-
-export default function Buyers({ buyers, setBuyers }) {
+export default function Buyers({ buyers, refreshBuyers }) {
   const [form, setForm] = useState({ name: '', phone: '', email: '' });
   const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   function resetForm() {
     setForm({ name: '', phone: '', email: '' });
     setEditingId(null);
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
+    setSaving(true);
 
     if (editingId) {
-      setBuyers(buyers.map(b => (b.id === editingId ? { ...b, ...form } : b)));
+      const { error } = await supabase
+        .from('buyers')
+        .update(form)
+        .eq('id', editingId);
+      if (error) console.error('Error updating buyer:', error.message);
     } else {
-      setBuyers([...buyers, { id: uid(), ...form }]);
+      const { error } = await supabase.from('buyers').insert(form);
+      if (error) console.error('Error adding buyer:', error.message);
     }
+
+    await refreshBuyers();
+    setSaving(false);
     resetForm();
   }
 
   function handleEdit(buyer) {
-    setForm({ name: buyer.name, phone: buyer.phone, email: buyer.email });
+    setForm({ name: buyer.name, phone: buyer.phone || '', email: buyer.email || '' });
     setEditingId(buyer.id);
   }
 
-  function handleDelete(id) {
-    if (window.confirm('Delete this buyer? Their sales history will remain but show as "Unknown".')) {
-      setBuyers(buyers.filter(b => b.id !== id));
+  async function handleDelete(id) {
+    if (!window.confirm('Delete this buyer? Their sales history will remain but show as "Unknown".')) {
+      return;
     }
+    const { error } = await supabase.from('buyers').delete().eq('id', id);
+    if (error) console.error('Error deleting buyer:', error.message);
+    await refreshBuyers();
   }
 
   return (
@@ -57,8 +67,14 @@ export default function Buyers({ buyers, setBuyers }) {
           value={form.email}
           onChange={e => setForm({ ...form, email: e.target.value })}
         />
-        <button type="submit">{editingId ? 'Save' : 'Add Buyer'}</button>
-        {editingId && <button type="button" onClick={resetForm}>Cancel</button>}
+        <button type="submit" disabled={saving}>
+          {editingId ? 'Save' : 'Add Buyer'}
+        </button>
+        {editingId && (
+          <button type="button" onClick={resetForm} disabled={saving}>
+            Cancel
+          </button>
+        )}
       </form>
 
       <table>
