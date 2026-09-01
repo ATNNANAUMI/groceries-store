@@ -1,16 +1,34 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import Login from './components/Login';
 import Buyers from './components/Buyers';
 import Items from './components/Items';
 import Sales from './components/Sales';
 import './App.css';
 
 function App() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [buyers, setBuyers] = useState([]);
   const [items, setItems] = useState([]);
   const [sales, setSales] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [tab, setTab] = useState('sales');
+
+  // Auth: check session on load, listen for changes
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   const refreshBuyers = useCallback(async () => {
     const { data, error } = await supabase
@@ -40,17 +58,20 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!session) return;
     async function loadAll() {
-      setLoading(true);
+      setDataLoading(true);
       await Promise.all([refreshBuyers(), refreshItems(), refreshSales()]);
-      setLoading(false);
+      setDataLoading(false);
     }
     loadAll();
-  }, [refreshBuyers, refreshItems, refreshSales]);
+  }, [session, refreshBuyers, refreshItems, refreshSales]);
 
-  const totalRevenue = sales.reduce((sum, s) => sum + Number(s.total), 0);
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+  }
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="App">
         <p>Loading...</p>
@@ -58,10 +79,27 @@ function App() {
     );
   }
 
+  if (!session) {
+    return <Login />;
+  }
+
+  if (dataLoading) {
+    return (
+      <div className="App">
+        <p>Loading data...</p>
+      </div>
+    );
+  }
+
+  const totalRevenue = sales.reduce((sum, s) => sum + Number(s.total), 0);
+
   return (
     <div className="App">
       <header className="AppHeader">
-        <h1>Groceries Store — Owner Console</h1>
+        <div className="header-top">
+          <h1>Groceries Store — Owner Console</h1>
+          <button className="signout-btn" onClick={handleSignOut}>Sign Out</button>
+        </div>
         <div className="stats">
           <span>Buyers: {buyers.length}</span>
           <span>Items: {items.length}</span>
