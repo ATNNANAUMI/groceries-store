@@ -2,6 +2,9 @@
 
 A simple internal tool for a store owner to track buyers, items, and sales — who bought what, when, and how much. Built with React and Supabase (Postgres) so data syncs across any device, protected behind owner login.
 
+can be accessed using the link:
+https://groceries-store-seven.vercel.app/
+
 ## Features
 
 - **Owner login** — the app is gated behind email/password authentication; no public sign-up
