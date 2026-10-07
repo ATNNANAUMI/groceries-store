@@ -1,0 +1,37 @@
+# Local stack for the self-hosted backend.
+#   docker compose up -d db      -> Postgres on localhost:5432 with db/schema.sql applied
+# The `api` service is commented out until server/ is implemented.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: groceries
+      POSTGRES_USER: groceries
+      POSTGRES_PASSWORD: groceries
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U groceries -d groceries"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # api:
+  #   build: ./server
+  #   environment:
+  #     DATABASE_URL: postgres://groceries:groceries@db:5432/groceries
+  #     JWT_SECRET: change-me
+  #     PORT: 4000
+  #     CORS_ORIGIN: http://localhost:3000
+  #   ports:
+  #     - "4000:4000"
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+
+volumes:
+  db-data:

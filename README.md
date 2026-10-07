@@ -16,20 +16,28 @@ https://groceries-store-seven.vercel.app/
 
 ## Tech stack
 
-- [React](https://react.dev/) (Create React App)
-- [Supabase](https://supabase.com/) — hosted Postgres database, auto-generated REST API, and authentication
+- [React](https://react.dev/) (Create React App) in `client/`
+- [Supabase](https://supabase.com/) — hosted Postgres + auth (current backend)
+- Planned: self-hosted REST API in `server/` + Postgres via Docker (see [server/README.md](server/README.md))
 
 ## Project structure
 
-    src/
-      components/
-        Login.js         - Owner login screen
-        Buyers.js         - Buyer CRUD UI
-        Items.js          - Item CRUD UI
-        Sales.js          - Sale recording + history UI
-      supabaseClient.js  - Supabase client setup
-      App.js             - Auth gate + tab navigation + data fetching
-      App.css
+    client/                 React app
+      src/
+        api/                Data-access layer — the ONLY place that talks to a backend
+          index.js            picks the provider from REACT_APP_API_PROVIDER
+          supabaseProvider.js current backend
+          restProvider.js     client for the future self-hosted server
+        components/         Login, Buyers, Items, Sales, ErrorBanner
+        lib/format.js       money/date helpers
+        App.js              auth gate, tabs, data loading
+    db/
+      schema.sql            portable Postgres schema (Supabase or plain Postgres)
+      supabase/policies.sql Row Level Security (Supabase only)
+      migrations/           upgrades for existing databases
+    docs/api-contract.md    the contract every backend must implement
+    server/                 future REST API (not implemented yet)
+    docker-compose.yml      local Postgres (and later the API)
 
 ## Setup
 
@@ -37,80 +45,36 @@ https://groceries-store-seven.vercel.app/
 
 ```bash
 git clone <your-repo-url>
-cd groceries-store
+cd groceries-store/client
 npm install
 ```
 
 ### 2. Create a Supabase project
 
 1. Go to [supabase.com](https://supabase.com) and create a new project.
-2. In the **SQL Editor**, run:
-
-```sql
-create table buyers (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  phone text,
-  email text,
-  created_at timestamp default now()
-);
-
-create table items (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  price numeric(10,2) not null default 0,
-  stock integer not null default 0,
-  created_at timestamp default now()
-);
-
-create table sales (
-  id uuid primary key default gen_random_uuid(),
-  buyer_id uuid references buyers(id) on delete set null,
-  item_id uuid references items(id) on delete set null,
-  quantity integer not null,
-  total numeric(10,2) not null,
-  sale_date date not null default current_date,
-  created_at timestamp default now()
-);
-
-alter table buyers enable row level security;
-alter table items enable row level security;
-alter table sales enable row level security;
-
-create policy "Allow authenticated full access"
-on buyers for all
-using (auth.role() = 'authenticated')
-with check (auth.role() = 'authenticated');
-
-create policy "Allow authenticated full access"
-on items for all
-using (auth.role() = 'authenticated')
-with check (auth.role() = 'authenticated');
-
-create policy "Allow authenticated full access"
-on sales for all
-using (auth.role() = 'authenticated')
-with check (auth.role() = 'authenticated');
-```
-
+2. In the **SQL Editor**, run [`db/schema.sql`](db/schema.sql), then [`db/supabase/policies.sql`](db/supabase/policies.sql).
+   Already have the tables from an older version of this README? Run [`db/migrations/001_constraints.sql`](db/migrations/001_constraints.sql) instead.
 3. Under **Project Settings → API**, copy your **Project URL** and **anon public** key.
 4. Under **Authentication → Users**, add yourself as a user (email + password, auto-confirmed). This is the login you'll use to access the app — there's no public sign-up flow.
 
 ### 3. Configure environment variables
 
-Create a `.env` file in the project root:
+Copy `client/.env.example` to `client/.env` and fill in your values:
 
+```
+REACT_APP_API_PROVIDER=supabase
 REACT_APP_SUPABASE_URL=https://your-project.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=your-anon-key
+```
 
-
-Use placeholders like these when committing example files — never commit your real `.env` (it's already git-ignored).
+Never commit your real `.env` (it's git-ignored).
 
 **Important:** use the bare project URL only — no `/rest/v1/` path, no trailing slash.
 
 ### 4. Run locally
 
 ```bash
+cd client
 npm start
 ```
 
@@ -121,7 +85,7 @@ Opens at `http://localhost:3000`. Restart the dev server any time `.env` changes
 The frontend is stateless (all data lives in Supabase), so it can be deployed anywhere that serves static React apps — e.g., [Vercel](https://vercel.com) or [Netlify](https://netlify.com):
 
 1. Push this repo to GitHub.
-2. Import it into Vercel/Netlify.
+2. Import it into Vercel/Netlify and set the **root directory** to `client`.
 3. Add the same `REACT_APP_SUPABASE_URL` and `REACT_APP_SUPABASE_ANON_KEY` as environment variables in the deployment settings.
 4. Deploy. Any device can now reach the app — it just needs a valid login to see or change data.
 
@@ -132,7 +96,7 @@ The frontend is stateless (all data lives in Supabase), so it can be deployed an
 - The anon key is meant to be public (it ships in the frontend bundle by design), but it is no longer sufficient on its own to read or write data.
 - There is currently only single-user access (whoever's credentials you create in Supabase) — no per-user roles or permissions.
 
-## Available scripts
+## Available scripts (run inside `client/`)
 
 - `npm start` — run the dev server
 - `npm run build` — build a production bundle to `build/`
