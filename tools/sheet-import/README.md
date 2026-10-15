@@ -16,6 +16,7 @@ cd tools/sheet-import
 | 3. mapping files | `python make_mappings.py ../../dump/output/order_lines.csv ../../dump/mappings` | `customers.csv`, `items.csv` |
 | 4. **edit the mappings** | see below | |
 | 5. import | `python import_sales.py` (dry run) → `python import_sales.py --commit` | rows in Supabase |
+| 6. verify | `python import_sales.py --check` | per-year counts: database vs. expected |
 
 Run `db/migrations/002_sales_import.sql` and `003_sale_discount.sql` in the Supabase SQL editor
 once before importing (`--commit` stops with a message if they haven't been).
@@ -64,3 +65,5 @@ updates the same rows (ids are derived from the content), so: edit → re-import
   those rows (and refuses if sales recorded in the app point at imported buyers, unless `--force`).
 - Buyers/items you already created in the site (same name) are reused and never modified.
 - Stock is never changed. Payments are not imported.
+- `--commit` ends by counting what reached the database; if it was interrupted, run it again —
+  it fills in what is missing without duplicating anything.

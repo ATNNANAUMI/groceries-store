@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { api } from '../api';
+import { matchesSearch, sortByName } from '../lib/search';
 import ErrorBanner from './ErrorBanner';
 
 const EMPTY = { name: '', phone: '', email: '' };
@@ -9,6 +10,12 @@ export default function Buyers({ buyers, refreshBuyers }) {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+
+  const shownBuyers = useMemo(
+    () => sortByName(buyers).filter(b => matchesSearch(search, b.name, b.phone, b.email)),
+    [buyers, search],
+  );
 
   function resetForm() {
     setForm(EMPTY);
@@ -100,7 +107,19 @@ export default function Buyers({ buyers, refreshBuyers }) {
 
       <div className="card-header">
         <h2>Clientes</h2>
-        <span className="muted">{buyers.length} no total</span>
+        <div className="card-header-tools">
+          <span className="muted">
+            {search ? `${shownBuyers.length} de ${buyers.length}` : `${buyers.length} no total`}
+          </span>
+          <input
+            type="search"
+            className="select-compact search-box"
+            placeholder="Buscar por nome, telefone ou e-mail…"
+            aria-label="Buscar cliente"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
       </div>
       <div className="table-wrap">
         <table>
@@ -108,7 +127,7 @@ export default function Buyers({ buyers, refreshBuyers }) {
             <tr><th>Nome</th><th>Telefone</th><th>E-mail</th><th className="actions-col"></th></tr>
           </thead>
           <tbody>
-            {buyers.map(b => (
+            {shownBuyers.map(b => (
               <tr key={b.id} className={b.id === editingId ? 'editing' : ''}>
                 <td className="strong">{b.name}</td>
                 <td>{b.phone || <span className="muted">—</span>}</td>
@@ -119,8 +138,12 @@ export default function Buyers({ buyers, refreshBuyers }) {
                 </td>
               </tr>
             ))}
-            {buyers.length === 0 && (
-              <tr><td colSpan={4} className="empty">Nenhum cliente ainda — adicione o primeiro acima.</td></tr>
+            {shownBuyers.length === 0 && (
+              <tr><td colSpan={4} className="empty">
+                {buyers.length === 0
+                  ? 'Nenhum cliente ainda — adicione o primeiro acima.'
+                  : `Nenhum cliente encontrado para "${search}".`}
+              </td></tr>
             )}
           </tbody>
         </table>
