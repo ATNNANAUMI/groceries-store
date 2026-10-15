@@ -311,6 +311,28 @@ tbody tr.editing { background: var(--accent-soft); }
 .row-actions { white-space: nowrap; text-align: right; }
 .row-actions .btn + .btn { margin-left: 6px; }
 
+/* Paged tables: the pager sits under the table instead of the table bleeding to the card edge. */
+.table-wrap.table-wrap-paged { margin-bottom: 0; }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+}
+
+.pager-buttons { display: flex; align-items: center; gap: 6px; }
+
+.pager-status {
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .empty {
   text-align: center;
   color: var(--text-muted);
@@ -404,6 +426,7 @@ tbody tr.editing { background: var(--accent-soft); }
   th:first-child, td:first-child { padding-left: 16px; }
   th:last-child, td:last-child { padding-right: 16px; }
   .tabs { align-self: stretch; }
+  .pager, .pager-buttons { justify-content: center; flex-wrap: wrap; }
   .tab { flex: 1; }
   .user-email { display: none; }
   .form-grid-sale { grid-template-columns: 1fr; }

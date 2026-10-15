@@ -1,8 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { api } from '../api';
 import { formatMoney, formatDate, formatPercent, todayLocal } from '../lib/format';
 import { saleTotal, parseDiscount } from '../lib/sales';
 import ErrorBanner from './ErrorBanner';
+
+const PAGE_SIZE = 50;
+const formatCount = n => n.toLocaleString('pt-BR');
 
 export default function Sales({ sales, buyers, items, refreshSales, refreshItems }) {
   const [form, setForm] = useState({
@@ -13,6 +16,8 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
     date: todayLocal(),
   });
   const [buyerFilter, setBuyerFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const historyRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,6 +42,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         saleDate: form.date,
       });
       setForm(f => ({ ...f, itemId: '', quantity: 1, discount: '' }));
+      setPage(0);
     } catch (err) {
       setError(err.message);
     }
@@ -70,6 +76,17 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
   }, [sales, buyerFilter]);
 
   const filteredTotal = filteredSales.reduce((sum, s) => sum + Number(s.total), 0);
+
+  // Rendering every sale (thousands after the spreadsheet import) is slow, so show one page.
+  const pageCount = Math.max(1, Math.ceil(filteredSales.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);  // a delete can shrink the last page away
+  const firstIndex = currentPage * PAGE_SIZE;
+  const pageSales = filteredSales.slice(firstIndex, firstIndex + PAGE_SIZE);
+
+  function goToPage(p) {
+    setPage(p);
+    historyRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }
 
   return (
     <section className="card">
@@ -173,14 +190,14 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         )}
       </form>
 
-      <div className="card-header">
+      <div className="card-header" ref={historyRef}>
         <h2>Histórico de vendas</h2>
         <div className="card-header-tools">
-          <span className="muted">{filteredSales.length} vendas · {formatMoney(filteredTotal)}</span>
+          <span className="muted">{formatCount(filteredSales.length)} vendas · {formatMoney(filteredTotal)}</span>
           <select
             className="select-compact"
             value={buyerFilter}
-            onChange={e => setBuyerFilter(e.target.value)}
+            onChange={e => { setBuyerFilter(e.target.value); setPage(0); }}
             aria-label="Filtrar por cliente"
           >
             <option value="">Todos os clientes</option>
@@ -191,7 +208,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         </div>
       </div>
 
-      <div className="table-wrap">
+      <div className={pageCount > 1 ? 'table-wrap table-wrap-paged' : 'table-wrap'}>
         <table>
           <thead>
             <tr>
@@ -201,7 +218,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
             </tr>
           </thead>
           <tbody>
-            {filteredSales.map(s => (
+            {pageSales.map(s => (
               <tr key={s.id}>
                 <td className="nowrap">{formatDate(s.sale_date)}</td>
                 <td className="strong">{buyerName(s.buyer_id)}</td>
@@ -221,6 +238,27 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
           </tbody>
         </table>
       </div>
+
+      {pageCount > 1 && (
+        <nav className="pager" aria-label="Páginas do histórico">
+          <span className="muted">
+            {formatCount(firstIndex + 1)}–{formatCount(firstIndex + pageSales.length)} de {formatCount(filteredSales.length)}
+          </span>
+          <div className="pager-buttons">
+            <button className="btn btn-small" onClick={() => goToPage(0)} disabled={currentPage === 0}
+              aria-label="Primeira página">«</button>
+            <button className="btn btn-small" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}>
+              ‹ Anterior
+            </button>
+            <span className="pager-status">Página {formatCount(currentPage + 1)} de {formatCount(pageCount)}</span>
+            <button className="btn btn-small" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === pageCount - 1}>
+              Próxima ›
+            </button>
+            <button className="btn btn-small" onClick={() => goToPage(pageCount - 1)} disabled={currentPage === pageCount - 1}
+              aria-label="Última página">»</button>
+          </div>
+        </nav>
+      )}
     </section>
   );
 }
