@@ -55,7 +55,13 @@ charged less gets the difference as a discount — unless that lower price is it
 charged an exact multiple of the price ("salgado" 17.00) gets that quantity. The catalog price
 of an imported item is its regular price at its latest sale. Blank `item_name` imports the line with its text only.
 
-Re-running `make_mappings.py` keeps your edits. Re-running `import_sales.py --commit`
+`half_portion=yes` marks "1/2 coca 600"-style lines: one item split between two people. They are
+imported as that item ×1 at its regular price with the rest as discount (~50%); a vague label
+("1/2 coca") picks the product costing about twice the amount. If nothing fits (e.g. "1/2 almoço",
+a smaller meal at its own price) the line keeps its text only.
+
+Re-running `make_mappings.py` keeps your edits: the `auto_*` columns hold what the script
+generated, and a value that differs from them counts as yours (don't edit the `auto_*` columns). Re-running `import_sales.py --commit`
 updates the same rows (ids are derived from the content), so: edit → re-import is safe.
 
 ## Import safety
@@ -65,5 +71,7 @@ updates the same rows (ids are derived from the content), so: edit → re-import
   those rows (and refuses if sales recorded in the app point at imported buyers, unless `--force`).
 - Buyers/items you already created in the site (same name) are reused and never modified.
 - Stock is never changed. Payments are not imported.
+- `--commit` removes imported buyers/items the mappings no longer produce (e.g. a renamed
+  product), unless a sale still uses them.
 - `--commit` ends by counting what reached the database; if it was interrupted, run it again —
   it fills in what is missing without duplicating anything.

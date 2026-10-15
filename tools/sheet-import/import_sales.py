@@ -110,11 +110,20 @@ def price_and_discount(amount, qty, regular, prices=None):
     return unit_price, max(0.0, discount)
 
 
+HALF_LABEL = re.compile(r'^1\s*/\s*2\s*')
+
+
+def nearest_price(history, when):
+    """Unit price of the item's sale closest in time to `when` (fallback when the window is empty)."""
+    return min(history, key=lambda h: abs((h[0] - when).days))[1] if history else None
+
+
 def build_rows(lines, customers, items_map, batch):
     buyer_of = {r['sheet_name']: r['buyer_name'].strip() for r in customers if r['buyer_name'].strip()}
-    item_of = {r['sheet_label']: (r['item_name'].strip(), int(r['quantity'] or 1)) for r in items_map}
+    item_of = {r['sheet_label']: (r['item_name'].strip(), int(r['quantity'] or 1), r.get('half_portion') == 'yes')
+               for r in items_map}
 
-    buyers, items, rows = {}, {}, []
+    buyers, item_names, rows = {}, {}, []
     history = collections.defaultdict(list)
     missing_customers = set()
     for l in lines:
@@ -127,46 +136,73 @@ def build_rows(lines, customers, items_map, batch):
         bkey = ascii_lower(buyer_name)
         buyers.setdefault(bkey, {'id': stable_id('buyer', bkey), 'name': buyer_name, 'import_batch': batch})
 
-        item_name, qty = item_of.get(ascii_lower(l['label']), ('', 1))
+        item_name, qty, half = item_of.get(ascii_lower(l['label']), ('', 1, False))
         qty = max(qty, 1)
         amount = round(float(l['amount']), 2)
         when = datetime.date.fromisoformat(l['datetime'][:10])
         ikey = None
         if item_name:
             ikey = ascii_lower(item_name)
-            items.setdefault(ikey, {'id': stable_id('item', ikey), 'name': item_name, 'stock': 0, 'import_batch': batch})
-            history[ikey].append((when, round(amount / qty, 2)))
-        rows.append((l, buyers[bkey]['id'], ikey, qty, amount, when))
+            item_names.setdefault(ikey, item_name)
+            if not half:  # half portions would drag the item's regular price down
+                history[ikey].append((when, round(amount / qty, 2)))
+        rows.append((l, buyers[bkey]['id'], ikey, qty, amount, when, half))
 
     for h in history.values():
         h.sort()
 
-    sales, stats = [], collections.Counter()
-    for l, buyer_id, ikey, qty, amount, when in rows:
-        prices = window_prices(history[ikey], when) if ikey else None
-        regular = max(prices, key=lambda p: (prices[p], p)) if prices else None
-        # "salgado" written once but charged 17.00 when a salgado costs 8.50 → quantity 2.
-        if regular and qty == 1 and amount >= 2 * regular - 0.005:
-            k = round(amount / regular)
-            if abs(amount - k * regular) < 0.005:
-                qty = k
-                stats['quantity from amount'] += 1
-        unit_price, discount = price_and_discount(amount, qty, regular, prices)
-        if discount:
+    sales, used, stats = [], set(), collections.Counter()
+    for l, buyer_id, ikey, qty, amount, when, half in rows:
+        if half:
+            # "1/2 coca 600": one item split between two people → the item ×1 at its regular
+            # price, the rest as discount. Vague labels ("1/2 coca" = half a 2L or a 600ml) pick,
+            # among products starting with the same word, the one costing about twice the amount.
+            # Nothing fits (e.g. "1/2 almoço", a smaller meal at its own price) → text only.
+            words = HALF_LABEL.sub('', ascii_lower(l['label'])).split()
+            candidates = {k for k in history if words and k.split()[0].startswith(words[0])} - {ikey}
+            best = None
+            for k in [ikey] + sorted(candidates):  # the label's own product first: it wins ties
+                if not k:
+                    continue
+                regular = regular_price(history[k], when) or nearest_price(history[k], when)
+                if regular and 0.4 <= amount / regular <= 0.6 and (
+                        best is None or abs(amount / regular - 0.5) < abs(amount / best[1] - 0.5)):
+                    best = (k, regular)
+            if best:
+                ikey, regular = best
+                qty, unit_price, discount = 1, regular, round((1 - amount / regular) * 100, 4)
+                stats['half portion'] += 1
+            else:
+                ikey = None
+                qty, (unit_price, discount) = 1, price_and_discount(amount, 1, None)
+        else:
+            prices = window_prices(history[ikey], when) if ikey else None
+            regular = max(prices, key=lambda p: (prices[p], p)) if prices else None
+            # "salgado" written once but charged 17.00 when a salgado costs 8.50 → quantity 2.
+            if regular and qty == 1 and amount >= 2 * regular - 0.005:
+                k = round(amount / regular)
+                if abs(amount - k * regular) < 0.005:
+                    qty = k
+                    stats['quantity from amount'] += 1
+            unit_price, discount = price_and_discount(amount, qty, regular, prices)
+        if discount and not half:
             stats['with discount'] += 1
+        if ikey:
+            used.add(ikey)
         assert abs(round(qty * unit_price * (1 - discount / 100) + 1e-9, 2) - amount) < 0.005, (l['line_key'], amount)
         sales.append({
             'id': stable_id('sale', l['line_key']),
-            'buyer_id': buyer_id, 'item_id': items[ikey]['id'] if ikey else None,
+            'buyer_id': buyer_id, 'item_id': stable_id('item', ikey) if ikey else None,
             'quantity': qty, 'unit_price': unit_price, 'discount': discount, 'total': amount,
             'sale_date': l['datetime'][:10], 'sold_at': f"{l['datetime']}:00{TIMEZONE}",
             'description': l['label'], 'import_batch': batch,
         })
 
     # Catalog price = the item's regular price at its most recent sale.
-    for ikey, item in items.items():
-        item['price'] = regular_price(history[ikey], history[ikey][-1][0])
-    return list(buyers.values()), list(items.values()), sales, missing_customers, stats
+    items = [{'id': stable_id('item', ikey), 'name': item_names[ikey], 'stock': 0, 'import_batch': batch,
+              'price': regular_price(history[ikey], history[ikey][-1][0])}
+             for ikey in sorted(used)]
+    return list(buyers.values()), items, sales, missing_customers, stats
 
 
 def reuse_existing(rows, existing, kind):
@@ -235,6 +271,22 @@ class Supabase:
                          '003_sale_discount.sql in the Supabase SQL editor first.')
             r.raise_for_status()
 
+    def prune(self, table, keep_ids, batch):
+        """Delete rows of this import batch that the current mappings no longer produce (e.g. a
+        renamed product), unless some sale still uses them."""
+        column = {'buyers': 'buyer_id', 'items': 'item_id'}[table]
+        stale = [r['id'] for r in self.select_all(table, 'id,import_batch')
+                 if r.get('import_batch') == batch and r['id'] not in keep_ids]
+        kept = 0
+        for row_id in stale:
+            if self.count('sales', f'{column}=eq.{row_id}'):
+                kept += 1
+            else:
+                self.delete(table, f'id=eq.{row_id}')
+        if stale:
+            print(f'  {table}: removed {len(stale) - kept} imported rows no longer in the mappings'
+                  + (f', kept {kept} still used by sales' if kept else ''))
+
     def count(self, table, query):
         r = requests.get(f'{self.url}/rest/v1/{table}?select=id&{query}', timeout=60,
                          headers=self._headers({'Prefer': 'count=exact', 'Range': '0-0'}))
@@ -284,7 +336,8 @@ def summary(buyers, items, sales, missing, stats):
     years = collections.Counter(s['sale_date'][:4] for s in sales)
     print(f'buyers: {len(buyers)}   items: {len(items)}   sales: {len(sales)}   total: R$ {total:,.2f}')
     print(f'sales with a catalog item: {mapped} ({mapped / len(sales):.1%}); the rest keep the sheet text as description')
-    print(f"sales with a discount: {stats['with discount']}; quantity taken from the amount: {stats['quantity from amount']}")
+    print(f"sales with a discount: {stats['with discount']}; half portions (50% off): {stats['half portion']}; "
+          f"quantity taken from the amount: {stats['quantity from amount']}")
     print('sales per year:', dict(sorted(years.items())))
     if missing:
         print(f'WARNING: {len(missing)} sheet names have no buyer_name in customers.csv; their sales are skipped')
@@ -356,6 +409,8 @@ def main():
     db.upsert('buyers', buyers)
     db.upsert('items', items)
     db.upsert('sales', sales)
+    db.prune('items', {i['id'] for i in items}, args.batch)
+    db.prune('buyers', {b['id'] for b in buyers}, args.batch)
     if verify(db, buyers, items, sales, args.batch):
         print(f"Done. Undo with: python {os.path.relpath(__file__)} --rollback --batch {args.batch}")
     else:
