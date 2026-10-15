@@ -1,4 +1,4 @@
-const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export function formatMoney(value) {
   return currency.format(Number(value) || 0);
@@ -16,5 +16,12 @@ export function todayLocal() {
 export function formatDate(isoDate) {
   if (!isoDate) return '';
   const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+const percent = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
+// Discount percentages: up to one decimal, e.g. "10%", "13,2%".
+export function formatPercent(value) {
+  return `${percent.format(Number(value) || 0)}%`;
 }

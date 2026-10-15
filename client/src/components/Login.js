@@ -24,15 +24,15 @@ export default function Login() {
     <div className="center-screen login-screen">
       <form className="card login-card" onSubmit={handleSubmit}>
         <div className="brand brand-lg">
-          <span className="brand-mark" aria-hidden="true">G</span>
+          <span className="brand-mark" aria-hidden="true">C</span>
           <div>
-            <div className="brand-name">Groceries Store</div>
-            <div className="brand-sub">Owner console</div>
+            <div className="brand-name">Cantina</div>
+            <div className="brand-sub">Painel de gestão</div>
           </div>
         </div>
-        <h1 className="login-title">Sign in</h1>
+        <h1 className="login-title">Entrar</h1>
         <label className="field">
-          <span>Email</span>
+          <span>E-mail</span>
           <input
             type="email"
             autoComplete="username"
@@ -42,7 +42,7 @@ export default function Login() {
           />
         </label>
         <label className="field">
-          <span>Password</span>
+          <span>Senha</span>
           <input
             type="password"
             autoComplete="current-password"
@@ -53,7 +53,7 @@ export default function Login() {
         </label>
         {error && <p className="field-error">{error}</p>}
         <button className="btn btn-primary btn-block" type="submit" disabled={loading}>
-          {loading ? 'Signing in…' : 'Sign in'}
+          {loading ? 'Entrando…' : 'Entrar'}
         </button>
       </form>
     </div>

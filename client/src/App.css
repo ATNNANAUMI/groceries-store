@@ -181,7 +181,7 @@
   align-items: end;
 }
 
-.form-grid-sale { grid-template-columns: 1.2fr 1.6fr 90px 1fr auto; }
+.form-grid-sale { grid-template-columns: 1.2fr 1.6fr 90px 90px 1fr auto; }
 
 .form-full { grid-column: 1 / -1; }
 

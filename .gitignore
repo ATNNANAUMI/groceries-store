@@ -23,3 +23,10 @@ yarn-error.log*
 
 # Claude Code worktrees (separate checkouts)
 .claude/worktrees/
+
+# Spreadsheet exports with personal data — never commit
+dump/
+
+# Python virtualenv for tools/
+.venv/
+__pycache__/

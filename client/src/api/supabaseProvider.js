@@ -1,7 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
+import { saleTotal, parseDiscount } from '../lib/sales';
+
+// Supabase reports errors in English; translate the ones the owner can run into.
+const MESSAGES = {
+  'Invalid login credentials': 'E-mail ou senha incorretos',
+  'Email not confirmed': 'E-mail ainda não confirmado',
+  'Failed to fetch': 'Sem conexão com o servidor — verifique a internet',
+  'TypeError: Failed to fetch': 'Sem conexão com o servidor — verifique a internet',
+};
+
+function toError(error) {
+  return new Error(MESSAGES[error.message] || error.message);
+}
 
 function unwrap({ data, error }) {
-  if (error) throw new Error(error.message);
+  if (error) throw toError(error);
   return data;
 }
 
@@ -9,12 +22,20 @@ function toSession(session) {
   return session ? { user: { id: session.user.id, email: session.user.email } } : null;
 }
 
+// Supabase caps a response at 1000 rows by default, so lists are fetched page by page.
+const PAGE_SIZE = 1000;
+
 function crud(client, table, order) {
   return {
     list: async () => {
-      let query = client.from(table).select('*');
-      for (const [column, ascending] of order) query = query.order(column, { ascending });
-      return unwrap(await query);
+      const rows = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        let query = client.from(table).select('*');
+        for (const [column, ascending] of order) query = query.order(column, { ascending, nullsFirst: false });
+        const page = unwrap(await query.order('id').range(from, from + PAGE_SIZE - 1));
+        rows.push(...page);
+        if (page.length < PAGE_SIZE) return rows;
+      }
     },
     create: async row => unwrap(await client.from(table).insert(row).select().single()),
     update: async (id, row) => unwrap(await client.from(table).update(row).eq('id', id).select().single()),
@@ -30,7 +51,7 @@ export function createSupabaseProvider() {
   }
   const client = createClient(url, key);
 
-  const sales = crud(client, 'sales', [['sale_date', false], ['created_at', false]]);
+  const sales = crud(client, 'sales', [['sale_date', false], ['sold_at', false], ['created_at', false]]);
 
   return {
     auth: {
@@ -44,7 +65,7 @@ export function createSupabaseProvider() {
       },
       signOut: async () => {
         const { error } = await client.auth.signOut();
-        if (error) throw new Error(error.message);
+        if (error) throw toError(error);
       },
     },
 
@@ -59,10 +80,12 @@ export function createSupabaseProvider() {
       // else changed the stock meanwhile), then inserts the sale and rolls the
       // stock back if the insert fails. The REST server does this in one
       // SQL transaction instead.
-      create: async ({ buyerId, itemId, quantity, saleDate }) => {
+      create: async ({ buyerId, itemId, quantity, saleDate, discount = 0 }) => {
+        const pct = parseDiscount(discount);
+        if (Number.isNaN(pct)) throw new Error('O desconto deve ficar entre 0 e 100%');
         const item = unwrap(await client.from('items').select('*').eq('id', itemId).single());
         if (quantity > item.stock) {
-          throw new Error(`Only ${item.stock} of "${item.name}" in stock`);
+          throw new Error(`Só há ${item.stock} de "${item.name}" em estoque`);
         }
 
         const reserved = unwrap(await client
@@ -72,7 +95,7 @@ export function createSupabaseProvider() {
           .eq('stock', item.stock)
           .select());
         if (reserved.length === 0) {
-          throw new Error('Stock changed while saving — please try again');
+          throw new Error('O estoque mudou enquanto a venda era salva — tente novamente');
         }
 
         try {
@@ -80,7 +103,9 @@ export function createSupabaseProvider() {
             buyer_id: buyerId,
             item_id: itemId,
             quantity,
-            total: Number(item.price) * quantity,
+            unit_price: item.price,
+            discount: pct,
+            total: saleTotal(item.price, quantity, pct),
             sale_date: saleDate,
           });
         } catch (err) {

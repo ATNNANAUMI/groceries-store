@@ -9,9 +9,9 @@ import ErrorBanner from './components/ErrorBanner';
 import './App.css';
 
 const TABS = [
-  { id: 'sales', label: 'Sales' },
-  { id: 'buyers', label: 'Buyers' },
-  { id: 'items', label: 'Items' },
+  { id: 'sales', label: 'Vendas' },
+  { id: 'buyers', label: 'Clientes' },
+  { id: 'items', label: 'Produtos' },
 ];
 
 const LOW_STOCK = 5;
@@ -69,7 +69,7 @@ function App() {
   }
 
   if (authLoading) {
-    return <div className="center-screen"><div className="spinner" aria-label="Loading" /></div>;
+    return <div className="center-screen"><div className="spinner" aria-label="Carregando" /></div>;
   }
 
   if (!session) {
@@ -84,41 +84,41 @@ function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
-            <span className="brand-mark" aria-hidden="true">G</span>
+            <span className="brand-mark" aria-hidden="true">C</span>
             <div>
-              <div className="brand-name">Groceries Store</div>
-              <div className="brand-sub">Owner console</div>
+              <div className="brand-name">Cantina</div>
+              <div className="brand-sub">Painel de gestão</div>
             </div>
           </div>
           <div className="topbar-user">
             <span className="user-email">{session.user.email}</span>
-            <button className="btn btn-ghost" onClick={handleSignOut}>Sign out</button>
+            <button className="btn btn-ghost" onClick={handleSignOut}>Sair</button>
           </div>
         </div>
       </header>
 
       <main className="container">
         {loadError && (
-          <ErrorBanner message={`Could not load data: ${loadError}`} onRetry={loadAll} />
+          <ErrorBanner message={`Não foi possível carregar os dados: ${loadError}`} onRetry={loadAll} />
         )}
 
-        <section className="stats" aria-label="Summary">
+        <section className="stats" aria-label="Resumo">
           <div className="stat stat-accent">
-            <span className="stat-label">Revenue</span>
+            <span className="stat-label">Faturamento</span>
             <span className="stat-value">{formatMoney(totalRevenue)}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Sales</span>
+            <span className="stat-label">Vendas</span>
             <span className="stat-value">{sales.length}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Buyers</span>
+            <span className="stat-label">Clientes</span>
             <span className="stat-value">{buyers.length}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Items</span>
+            <span className="stat-label">Produtos</span>
             <span className="stat-value">{items.length}</span>
-            {lowStock > 0 && <span className="stat-note">{lowStock} low on stock</span>}
+            {lowStock > 0 && <span className="stat-note">{lowStock} com estoque baixo</span>}
           </div>
         </section>
 
@@ -137,7 +137,7 @@ function App() {
         </nav>
 
         {dataLoading ? (
-          <div className="card center"><div className="spinner" aria-label="Loading data" /></div>
+          <div className="card center"><div className="spinner" aria-label="Carregando dados" /></div>
         ) : (
           <>
             {tab === 'sales' && (

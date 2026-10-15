@@ -40,7 +40,7 @@ export default function Buyers({ buyers, refreshBuyers }) {
   }
 
   async function handleDelete(id) {
-    if (!window.confirm('Delete this buyer? Their sales history will remain but show as "Unknown".')) {
+    if (!window.confirm('Excluir este cliente? O histórico de vendas continua, mas aparece como "Desconhecido".')) {
       return;
     }
     setError('');
@@ -56,14 +56,14 @@ export default function Buyers({ buyers, refreshBuyers }) {
   return (
     <section className="card">
       <div className="card-header">
-        <h2>{editingId ? 'Edit buyer' : 'Add a buyer'}</h2>
+        <h2>{editingId ? 'Editar cliente' : 'Adicionar cliente'}</h2>
       </div>
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <form className="form-grid" onSubmit={handleSubmit}>
         <label className="field">
-          <span>Name</span>
+          <span>Nome</span>
           <input
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -71,7 +71,7 @@ export default function Buyers({ buyers, refreshBuyers }) {
           />
         </label>
         <label className="field">
-          <span>Phone</span>
+          <span>Telefone</span>
           <input
             type="tel"
             value={form.phone}
@@ -79,7 +79,7 @@ export default function Buyers({ buyers, refreshBuyers }) {
           />
         </label>
         <label className="field">
-          <span>Email</span>
+          <span>E-mail</span>
           <input
             type="email"
             value={form.email}
@@ -88,24 +88,24 @@ export default function Buyers({ buyers, refreshBuyers }) {
         </label>
         <div className="form-actions">
           <button className="btn btn-primary" type="submit" disabled={saving}>
-            {editingId ? 'Save' : 'Add buyer'}
+            {editingId ? 'Salvar' : 'Adicionar cliente'}
           </button>
           {editingId && (
             <button className="btn" type="button" onClick={resetForm} disabled={saving}>
-              Cancel
+              Cancelar
             </button>
           )}
         </div>
       </form>
 
       <div className="card-header">
-        <h2>Buyers</h2>
-        <span className="muted">{buyers.length} total</span>
+        <h2>Clientes</h2>
+        <span className="muted">{buyers.length} no total</span>
       </div>
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Name</th><th>Phone</th><th>Email</th><th className="actions-col"></th></tr>
+            <tr><th>Nome</th><th>Telefone</th><th>E-mail</th><th className="actions-col"></th></tr>
           </thead>
           <tbody>
             {buyers.map(b => (
@@ -114,13 +114,13 @@ export default function Buyers({ buyers, refreshBuyers }) {
                 <td>{b.phone || <span className="muted">—</span>}</td>
                 <td>{b.email || <span className="muted">—</span>}</td>
                 <td className="row-actions">
-                  <button className="btn btn-small" onClick={() => handleEdit(b)}>Edit</button>
-                  <button className="btn btn-small btn-danger" onClick={() => handleDelete(b.id)}>Delete</button>
+                  <button className="btn btn-small" onClick={() => handleEdit(b)}>Editar</button>
+                  <button className="btn btn-small btn-danger" onClick={() => handleDelete(b.id)}>Excluir</button>
                 </td>
               </tr>
             ))}
             {buyers.length === 0 && (
-              <tr><td colSpan={4} className="empty">No buyers yet — add your first one above.</td></tr>
+              <tr><td colSpan={4} className="empty">Nenhum cliente ainda — adicione o primeiro acima.</td></tr>
             )}
           </tbody>
         </table>

@@ -30,14 +30,19 @@ Env: copy `client/.env.example` → `client/.env`. `REACT_APP_API_PROVIDER` sele
 
 **State lives in `App.js`.** It holds the session plus `buyers`/`items`/`sales` arrays and passes `refreshX` callbacks down; components call `api.*` then the relevant refresh — there is no client cache or optimistic update. Data loading is keyed on `session.user.id`, not the session object, because Supabase replaces the session on every token refresh (keying on the object reloaded everything and wiped forms).
 
-**Sales mutate stock.** `api.sales.create` validates quantity ≤ stock, computes `total` from the current item price, and decrements stock. On Supabase this is a compare-and-set update (`.eq('stock', old)`) followed by the insert, with a manual rollback on failure; the REST server is expected to do it in one transaction (`SELECT … FOR UPDATE`). Deleting a sale does not restore stock. Deleting a buyer/item keeps its sales with a `null` FK (shown as "Unknown").
+**Sales mutate stock.** `api.sales.create` validates quantity ≤ stock and discount (0–100 %), stores the current item price as `unit_price`, computes `total = quantity × unit_price × (1 − discount/100)` with `saleTotal()` from `src/lib/sales.js`, and decrements stock. On Supabase this is a compare-and-set update (`.eq('stock', old)`) followed by the insert, with a manual rollback on failure; the REST server is expected to do it in one transaction (`SELECT … FOR UPDATE`). Deleting a sale does not restore stock. Deleting a buyer/item keeps its sales with a `null` FK (shown as "Unknown").
 
 **Conventions**
-- Money: always `formatMoney()` from `src/lib/format.js`; `numeric` columns may arrive as strings, so wrap in `Number()` before math.
+- Language: all UI text and user-facing error messages are Brazilian Portuguese (`pt-BR`), including messages thrown by the providers (`supabaseProvider.js` translates Supabase's English errors). Code, comments and identifiers stay in English.
+- Money: always `formatMoney()` from `src/lib/format.js` (BRL, `pt-BR`); `numeric` columns may arrive as strings, so wrap in `Number()` before math.
 - Dates: `sale_date` is a `YYYY-MM-DD` date column. Use `todayLocal()` / `formatDate()` — never `toISOString().slice(0, 10)` (UTC rolls to tomorrow in the evening for the owner's timezone).
 - Errors are shown in the UI with `<ErrorBanner>`; a form is reset only after a successful save.
 - Styling is plain CSS with design tokens (CSS custom properties, light + dark via `prefers-color-scheme`) in `src/index.css`; component classes (`.card`, `.btn`, `.btn-primary`, `.field`, `.form-grid`, `.table-wrap`, `.badge-*`) in `src/App.css`. Reuse these instead of adding new ad-hoc styles; no CSS framework.
 - Tests mock `./api` (see `src/App.test.js`), so they never need real credentials.
+
+## Spreadsheet import (`tools/sheet-import/`)
+
+Python pipeline that rebuilds historical sales from weekly `.xlsx` copies of the owner's Google Sheet and imports them (see its README). Input/output data lives in `dump/` (git-ignored, personal data — never commit or print it wholesale). Imported rows carry `import_batch`; imported sales have an estimated `sold_at` and keep the sheet text in `description`. `import_sales.py` must never modify stock or hand-made buyers/items.
 
 ## Database & security
 
