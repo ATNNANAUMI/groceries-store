@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { api } from '../api';
 import { formatMoney, formatDate, formatPercent, todayLocal } from '../lib/format';
 import { saleTotal, parseDiscount } from '../lib/sales';
@@ -9,7 +9,7 @@ import SearchSelect from './SearchSelect';
 const PAGE_SIZE = 50;
 const formatCount = n => n.toLocaleString('pt-BR');
 
-export default function Sales({ sales, buyers, items, refreshSales, refreshItems }) {
+export default function Sales({ summary, buyers, items, refreshSales, refreshItems }) {
   const [form, setForm] = useState({
     buyerId: '',
     itemId: '',
@@ -19,6 +19,12 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
   });
   const [buyerFilter, setBuyerFilter] = useState('');
   const [page, setPage] = useState(0);
+  const [pageInput, setPageInput] = useState('1');
+  const [jumpDate, setJumpDate] = useState('');
+  const [history, setHistory] = useState({ rows: [], count: 0, offset: 0 });
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [filterSummary, setFilterSummary] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const historyRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,6 +51,8 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
       });
       setForm(f => ({ ...f, itemId: '', quantity: 1, discount: '' }));
       setPage(0);
+      setJumpDate('');
+      setReloadKey(k => k + 1);
     } catch (err) {
       setError(err.message);
     }
@@ -62,6 +70,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
     setError('');
     try {
       await api.sales.remove(id);
+      setReloadKey(k => k + 1);
       await refreshSales();
     } catch (err) {
       setError(err.message);
@@ -91,21 +100,68 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
     [buyerOptions],
   );
 
-  const filteredSales = useMemo(() => {
-    return buyerFilter ? sales.filter(s => s.buyer_id === buyerFilter) : sales;
-  }, [sales, buyerFilter]);
+  // The history is loaded one page at a time from the database (there are tens of thousands of
+  // sales); totals come from api.sales.summary().
+  useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    const offset = page * PAGE_SIZE;
+    api.sales.page({ buyerId: buyerFilter || undefined, offset, limit: PAGE_SIZE })
+      .then(result => {
+        if (cancelled) return;
+        const lastPage = Math.max(0, Math.ceil(result.count / PAGE_SIZE) - 1);
+        if (page > lastPage) return setPage(lastPage);  // e.g. deleted the last sale of the last page
+        setHistory({ ...result, offset });
+      })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [buyerFilter, page, reloadKey]);
 
-  const filteredTotal = filteredSales.reduce((sum, s) => sum + Number(s.total), 0);
+  useEffect(() => {
+    if (!buyerFilter) return setFilterSummary(null);
+    let cancelled = false;
+    api.sales.summary({ buyerId: buyerFilter })
+      .then(result => { if (!cancelled) setFilterSummary(result); })
+      .catch(err => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [buyerFilter, reloadKey]);
 
-  // Rendering every sale (thousands after the spreadsheet import) is slow, so show one page.
-  const pageCount = Math.max(1, Math.ceil(filteredSales.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount - 1);  // a delete can shrink the last page away
-  const firstIndex = currentPage * PAGE_SIZE;
-  const pageSales = filteredSales.slice(firstIndex, firstIndex + PAGE_SIZE);
+  useEffect(() => setPageInput(String(page + 1)), [page]);
 
-  function goToPage(p) {
-    setPage(p);
+  const headerSummary = buyerFilter ? filterSummary : summary;
+  const pageCount = Math.max(1, Math.ceil(history.count / PAGE_SIZE));
+  const rows = history.rows;
+  const firstIndex = history.offset;  // of the rows on screen, which lag `page` while it loads
+  const jumpMissing = jumpDate && !historyLoading && !rows.some(r => r.sale_date === jumpDate);
+
+  function goToPage(p, { keepJump = false } = {}) {
+    if (!keepJump) setJumpDate('');
+    setPage(Math.min(Math.max(p, 0), pageCount - 1));
     historyRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }
+
+  function commitPageInput() {
+    const n = parseInt(pageInput, 10);
+    if (n >= 1 && n <= pageCount) goToPage(n - 1);
+    else setPageInput(String(page + 1));
+  }
+
+  async function jumpToDate(date) {
+    setJumpDate(date);
+    if (!date) return;
+    try {
+      const newer = await api.sales.countAfter({ date, buyerId: buyerFilter || undefined });
+      goToPage(Math.floor(newer / PAGE_SIZE), { keepJump: true });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function changeFilter(id) {
+    setBuyerFilter(id);
+    setJumpDate('');
+    setPage(0);
   }
 
   return (
@@ -207,20 +263,40 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
       <div className="card-header" ref={historyRef}>
         <h2>Histórico de vendas</h2>
         <div className="card-header-tools">
-          <span className="muted">{formatCount(filteredSales.length)} vendas · {formatMoney(filteredTotal)}</span>
+          {headerSummary && (
+            <span className="muted">
+              {formatCount(headerSummary.count)} vendas · {formatMoney(headerSummary.total)}
+            </span>
+          )}
           <SearchSelect
             options={filterOptions}
             value={buyerFilter}
-            onChange={id => { setBuyerFilter(id); setPage(0); }}
+            onChange={changeFilter}
             placeholder="Buscar cliente…"
             emptyText="Nenhum cliente encontrado"
             aria-label="Filtrar por cliente"
             compact
           />
+          <input
+            type="date"
+            className="select-compact date-jump"
+            value={jumpDate}
+            onChange={e => jumpToDate(e.target.value)}
+            aria-label="Ir para a data"
+            title="Ir para a data"
+          />
         </div>
       </div>
 
-      <div className={pageCount > 1 ? 'table-wrap table-wrap-paged' : 'table-wrap'}>
+      {jumpMissing && (
+        <p className="hint">Nenhuma venda em {formatDate(jumpDate)} — mostrando as anteriores.</p>
+      )}
+
+      <div className={[
+        'table-wrap',
+        pageCount > 1 && 'table-wrap-paged',
+        historyLoading && rows.length > 0 && 'is-loading',
+      ].filter(Boolean).join(' ')} aria-busy={historyLoading}>
         <table>
           <thead>
             <tr>
@@ -230,8 +306,8 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
             </tr>
           </thead>
           <tbody>
-            {pageSales.map(s => (
-              <tr key={s.id}>
+            {rows.map(s => (
+              <tr key={s.id} className={s.sale_date === jumpDate ? 'highlight' : undefined}>
                 <td className="nowrap">{formatDate(s.sale_date)}</td>
                 <td className="strong">{buyerName(s.buyer_id)}</td>
                 <td>{itemName(s)}</td>
@@ -240,12 +316,14 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
                 <td className="num">{Number(s.discount) > 0 ? formatPercent(s.discount) : ''}</td>
                 <td className="num strong">{formatMoney(s.total)}</td>
                 <td className="row-actions">
-                  <button className="btn btn-small btn-danger" onClick={() => handleDelete(s.id)}>Delete</button>
+                  <button className="btn btn-small btn-danger" onClick={() => handleDelete(s.id)}>Excluir</button>
                 </td>
               </tr>
             ))}
-            {filteredSales.length === 0 && (
-              <tr><td colSpan={8} className="empty">Nenhuma venda registrada ainda.</td></tr>
+            {rows.length === 0 && (
+              <tr><td colSpan={8} className="empty">
+                {historyLoading ? 'Carregando…' : buyerFilter ? 'Nenhuma venda para este cliente.' : 'Nenhuma venda registrada ainda.'}
+              </td></tr>
             )}
           </tbody>
         </table>
@@ -254,19 +332,34 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
       {pageCount > 1 && (
         <nav className="pager" aria-label="Páginas do histórico">
           <span className="muted">
-            {formatCount(firstIndex + 1)}–{formatCount(firstIndex + pageSales.length)} de {formatCount(filteredSales.length)}
+            {formatCount(firstIndex + 1)}–{formatCount(firstIndex + rows.length)} de {formatCount(history.count)}
           </span>
           <div className="pager-buttons">
-            <button className="btn btn-small" onClick={() => goToPage(0)} disabled={currentPage === 0}
+            <button className="btn btn-small" onClick={() => goToPage(0)} disabled={page === 0}
               aria-label="Primeira página">«</button>
-            <button className="btn btn-small" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}>
+            <button className="btn btn-small" onClick={() => goToPage(page - 1)} disabled={page === 0}>
               ‹ Anterior
             </button>
-            <span className="pager-status">Página {formatCount(currentPage + 1)} de {formatCount(pageCount)}</span>
-            <button className="btn btn-small" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === pageCount - 1}>
+            <span className="pager-status">
+              Página
+              <input
+                className="pager-input"
+                type="number"
+                min="1"
+                max={pageCount}
+                inputMode="numeric"
+                value={pageInput}
+                onChange={e => setPageInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') commitPageInput(); }}
+                onBlur={commitPageInput}
+                aria-label="Ir para a página"
+              />
+              de {formatCount(pageCount)}
+            </span>
+            <button className="btn btn-small" onClick={() => goToPage(page + 1)} disabled={page >= pageCount - 1}>
               Próxima ›
             </button>
-            <button className="btn btn-small" onClick={() => goToPage(pageCount - 1)} disabled={currentPage === pageCount - 1}
+            <button className="btn btn-small" onClick={() => goToPage(pageCount - 1)} disabled={page >= pageCount - 1}
               aria-label="Última página">»</button>
           </div>
         </nav>

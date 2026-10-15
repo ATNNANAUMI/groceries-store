@@ -6,7 +6,7 @@
 //   api.auth   { getSession, onChange, signIn, signOut }
 //   api.buyers { list, create, update, remove }
 //   api.items  { list, create, update, remove }
-//   api.sales  { list, create, remove }
+//   api.sales  { page, countAfter, summary, create, remove }
 // Methods return plain row objects and throw an Error on failure.
 import { createSupabaseProvider } from './supabaseProvider';
 import { createRestProvider } from './restProvider';

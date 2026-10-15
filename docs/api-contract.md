@@ -36,8 +36,15 @@ them in `Number()`. `buyer_id` / `item_id` become `null` when the referenced row
 spreadsheet text in `description` when no catalog item matched, and are tagged with
 `import_batch` so an import can be rolled back. Sales recorded in the app leave them `null`.
 
-`list()` must return **every** row. Supabase caps responses at 1000 rows, so the Supabase
-provider pages through results; the REST server must not truncate either.
+`buyers.list()` / `items.list()` must return **every** row. Supabase caps responses at 1000
+rows, so the Supabase provider pages through results; the REST server must not truncate either.
+
+Sales are **never** loaded all at once (there are tens of thousands): the history asks for one
+page at a time with `sales.page()`, and totals come from `sales.summary()`, computed in the
+database (`sales_summary()` in `db/schema.sql`).
+
+**History order** (used by `sales.page` and `sales.countAfter`):
+`sale_date desc, sold_at desc nulls last, created_at desc, id`.
 
 ## Client interface (`api.*`)
 
@@ -58,7 +65,9 @@ Brazilian Portuguese (the UI shows it as is).
 | `items.create({ name, price, stock })` | `Item` | |
 | `items.update(id, { name, price, stock })` | `Item` | |
 | `items.remove(id)` | – | sales keep the row with `item_id = null` |
-| `sales.list()` | `Sale[]` | `sale_date desc, sold_at desc (nulls last), created_at desc` |
+| `sales.page({ buyerId, offset, limit })` | `{ rows: Sale[], count }` | one page in history order; `count` = all sales matching `buyerId` (optional). An `offset` past the end returns `rows: []` with the real `count` |
+| `sales.countAfter({ date, buyerId })` | `number` | sales dated **after** `date` (`YYYY-MM-DD`) = the history index where `date` starts; used to jump to a date |
+| `sales.summary({ buyerId })` | `{ count, total }` | number of sales and sum of `total`, optionally for one buyer; `total` is a number |
 | `sales.create({ buyerId, itemId, quantity, saleDate, discount })` | `Sale` | see rules below |
 | `sales.remove(id)` | – | does **not** restore stock |
 
@@ -87,7 +96,9 @@ Every endpoint except `POST /auth/login` requires `Authorization: Bearer <token>
 | `PATCH /buyers/:id` | partial buyer | `200 Buyer` |
 | `DELETE /buyers/:id` | – | `204` |
 | `GET /items` · `POST /items` · `PATCH /items/:id` · `DELETE /items/:id` | same pattern | |
-| `GET /sales` | – | `200 Sale[]` |
+| `GET /sales?offset=&limit=&buyer_id=` | – | `200 { rows: Sale[], count }` (history order; `limit` ≤ 200) |
+| `GET /sales/count?after=YYYY-MM-DD&buyer_id=` | – | `200 { count }` |
+| `GET /sales/summary?buyer_id=` | – | `200 { count, total }` |
 | `POST /sales` | `{ buyer_id, item_id, quantity, discount, sale_date }` | `201 Sale` |
 | `DELETE /sales/:id` | – | `204` |
 | `GET /health` | – | `200 { ok: true }` (no auth; for Docker healthchecks) |
