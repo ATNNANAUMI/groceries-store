@@ -32,6 +32,8 @@ export function createRestProvider() {
         ...(token && { Authorization: `Bearer ${token}` }),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
+    }).catch(() => {
+      throw new Error('Sem conexão com o servidor — verifique a internet');
     });
 
     if (res.status === 401 && path !== '/auth/login') {
@@ -41,7 +43,7 @@ export function createRestProvider() {
     if (res.status === 204) return null;
 
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+    if (!res.ok) throw new Error(data?.error || `Falha na requisição (${res.status})`);
     return data;
   }
 

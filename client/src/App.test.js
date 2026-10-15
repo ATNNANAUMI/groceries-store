@@ -14,5 +14,5 @@ jest.mock('./api', () => ({
 
 test('shows the login screen when signed out', async () => {
   render(<App />);
-  expect(await screen.findByRole('heading', { name: /sign in/i })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: /entrar/i })).toBeInTheDocument();
 });

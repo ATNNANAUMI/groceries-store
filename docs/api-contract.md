@@ -41,7 +41,8 @@ provider pages through results; the REST server must not truncate either.
 
 ## Client interface (`api.*`)
 
-All methods are async and throw an `Error` with a user-readable `message` on failure.
+All methods are async and throw an `Error` with a user-readable `message` on failure, in
+Brazilian Portuguese (the UI shows it as is).
 
 | Method | Returns | Notes |
 |---|---|---|
@@ -64,9 +65,9 @@ All methods are async and throw an `Error` with a user-readable `message` on fai
 ### `sales.create` rules
 
 1. `quantity` is an integer ≥ 1 and ≤ the item's current stock — otherwise fail with a
-   message like `Only 3 of "Milk" in stock`.
+   message like `Só há 3 de "Salgado" em estoque`.
 2. `discount` is a percentage from 0 to 100 (optional, default 0) — otherwise fail with
-   `Discount must be between 0 and 100%`.
+   `O desconto deve ficar entre 0 e 100%`.
 3. `unit_price = item.price` (the **current** price, never trusted from the client) and
    `total = round(quantity × unit_price × (1 − discount/100), 2)`, both computed by the backend.
 4. Decrementing stock and inserting the sale must be atomic. The REST server does both in
@@ -91,5 +92,5 @@ Every endpoint except `POST /auth/login` requires `Authorization: Bearer <token>
 | `DELETE /sales/:id` | – | `204` |
 | `GET /health` | – | `200 { ok: true }` (no auth; for Docker healthchecks) |
 
-Errors: `{ "error": "human readable message" }` with `400` (validation), `401` (missing/invalid
+Errors: `{ "error": "mensagem legível em português" }` with `400` (validation), `401` (missing/invalid
 token — the client signs out), `404`, `409` (insufficient stock / conflict), `500`.

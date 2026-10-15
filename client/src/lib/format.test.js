@@ -1,4 +1,4 @@
-import { formatMoney, formatPercent, todayLocal } from './format';
+import { formatMoney, formatPercent, formatDate, todayLocal } from './format';
 
 test('formatMoney formats numbers and numeric strings', () => {
   // pt-BR puts a non-breaking space after R$.
@@ -15,5 +15,10 @@ test('todayLocal uses the local calendar date', () => {
 
 test('formatPercent shows up to one decimal', () => {
   expect(formatPercent(10)).toBe('10%');
-  expect(formatPercent('13.2075')).toBe('13.2%');
+  expect(formatPercent('13.2075')).toBe('13,2%');
+});
+
+test('formatDate renders a date column in Brazilian Portuguese', () => {
+  expect(formatDate('2026-10-07')).toBe('07 de out. de 2026');
+  expect(formatDate(null)).toBe('');
 });

@@ -50,7 +50,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
   }
 
   async function handleDelete(id) {
-    if (!window.confirm('Delete this sale record? Stock is not restored.')) return;
+    if (!window.confirm('Excluir esta venda? O estoque não é devolvido.')) return;
     setError('');
     try {
       await api.sales.remove(id);
@@ -60,7 +60,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
     }
   }
 
-  const unknown = <span className="muted">Unknown</span>;
+  const unknown = <span className="muted">Desconhecido</span>;
   const buyerName = id => buyers.find(b => b.id === id)?.name || unknown;
   // Imported sales without a catalog item keep the spreadsheet text in `description`.
   const itemName = sale => items.find(i => i.id === sale.item_id)?.name || sale.description || unknown;
@@ -74,26 +74,26 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
   return (
     <section className="card">
       <div className="card-header">
-        <h2>Record a sale</h2>
+        <h2>Registrar venda</h2>
       </div>
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       {(buyers.length === 0 || items.length === 0) && (
         <p className="hint">
-          Add at least one {buyers.length === 0 ? 'buyer' : 'item'} before recording a sale.
+          Cadastre pelo menos um {buyers.length === 0 ? 'cliente' : 'produto'} antes de registrar uma venda.
         </p>
       )}
 
       <form className="form-grid form-grid-sale" onSubmit={handleSubmit}>
         <label className="field">
-          <span>Buyer</span>
+          <span>Cliente</span>
           <select
             value={form.buyerId}
             onChange={e => setForm(f => ({ ...f, buyerId: e.target.value }))}
             required
           >
-            <option value="">Select buyer</option>
+            <option value="">Selecione o cliente</option>
             {buyers.map(b => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
@@ -101,23 +101,23 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         </label>
 
         <label className="field">
-          <span>Item</span>
+          <span>Produto</span>
           <select
             value={form.itemId}
             onChange={e => setForm(f => ({ ...f, itemId: e.target.value }))}
             required
           >
-            <option value="">Select item</option>
+            <option value="">Selecione o produto</option>
             {items.map(i => (
               <option key={i.id} value={i.id} disabled={i.stock === 0}>
-                {i.name} — {formatMoney(i.price)} ({i.stock} in stock)
+                {i.name} — {formatMoney(i.price)} ({i.stock} em estoque)
               </option>
             ))}
           </select>
         </label>
 
         <label className="field field-narrow">
-          <span>Qty</span>
+          <span>Qtd.</span>
           <input
             type="number"
             min="1"
@@ -132,7 +132,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         </label>
 
         <label className="field field-narrow">
-          <span>Discount %</span>
+          <span>Desconto %</span>
           <input
             type="number"
             min="0"
@@ -147,7 +147,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         </label>
 
         <label className="field">
-          <span>Date</span>
+          <span>Data</span>
           <input
             type="date"
             value={form.date}
@@ -162,28 +162,28 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
             <strong>{formatMoney(selectedItem && !badDiscount ? saleTotal(selectedItem.price, qty, discount) : 0)}</strong>
           </div>
           <button className="btn btn-primary" type="submit" disabled={saving || overStock || badDiscount}>
-            {saving ? 'Saving…' : 'Record sale'}
+            {saving ? 'Salvando…' : 'Registrar venda'}
           </button>
         </div>
         {overStock && (
-          <p className="field-error form-full">Only {selectedItem.stock} in stock.</p>
+          <p className="field-error form-full">Só há {selectedItem.stock} em estoque.</p>
         )}
         {badDiscount && (
-          <p className="field-error form-full">Discount must be between 0 and 100%.</p>
+          <p className="field-error form-full">O desconto deve ficar entre 0 e 100%.</p>
         )}
       </form>
 
       <div className="card-header">
-        <h2>Sales history</h2>
+        <h2>Histórico de vendas</h2>
         <div className="card-header-tools">
-          <span className="muted">{filteredSales.length} sales · {formatMoney(filteredTotal)}</span>
+          <span className="muted">{filteredSales.length} vendas · {formatMoney(filteredTotal)}</span>
           <select
             className="select-compact"
             value={buyerFilter}
             onChange={e => setBuyerFilter(e.target.value)}
-            aria-label="Filter by buyer"
+            aria-label="Filtrar por cliente"
           >
-            <option value="">All buyers</option>
+            <option value="">Todos os clientes</option>
             {buyers.map(b => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
@@ -195,8 +195,8 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         <table>
           <thead>
             <tr>
-              <th>Date</th><th>Buyer</th><th>Item</th>
-              <th className="num">Qty</th><th className="num">Price</th><th className="num">Disc.</th>
+              <th>Data</th><th>Cliente</th><th>Produto</th>
+              <th className="num">Qtd.</th><th className="num">Preço</th><th className="num">Desc.</th>
               <th className="num">Total</th><th className="actions-col"></th>
             </tr>
           </thead>
@@ -216,7 +216,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
               </tr>
             ))}
             {filteredSales.length === 0 && (
-              <tr><td colSpan={8} className="empty">No sales recorded yet.</td></tr>
+              <tr><td colSpan={8} className="empty">Nenhuma venda registrada ainda.</td></tr>
             )}
           </tbody>
         </table>

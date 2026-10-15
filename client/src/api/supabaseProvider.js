@@ -1,8 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { saleTotal, parseDiscount } from '../lib/sales';
 
+// Supabase reports errors in English; translate the ones the owner can run into.
+const MESSAGES = {
+  'Invalid login credentials': 'E-mail ou senha incorretos',
+  'Email not confirmed': 'E-mail ainda não confirmado',
+  'Failed to fetch': 'Sem conexão com o servidor — verifique a internet',
+  'TypeError: Failed to fetch': 'Sem conexão com o servidor — verifique a internet',
+};
+
+function toError(error) {
+  return new Error(MESSAGES[error.message] || error.message);
+}
+
 function unwrap({ data, error }) {
-  if (error) throw new Error(error.message);
+  if (error) throw toError(error);
   return data;
 }
 
@@ -53,7 +65,7 @@ export function createSupabaseProvider() {
       },
       signOut: async () => {
         const { error } = await client.auth.signOut();
-        if (error) throw new Error(error.message);
+        if (error) throw toError(error);
       },
     },
 
@@ -70,10 +82,10 @@ export function createSupabaseProvider() {
       // SQL transaction instead.
       create: async ({ buyerId, itemId, quantity, saleDate, discount = 0 }) => {
         const pct = parseDiscount(discount);
-        if (Number.isNaN(pct)) throw new Error('Discount must be between 0 and 100%');
+        if (Number.isNaN(pct)) throw new Error('O desconto deve ficar entre 0 e 100%');
         const item = unwrap(await client.from('items').select('*').eq('id', itemId).single());
         if (quantity > item.stock) {
-          throw new Error(`Only ${item.stock} of "${item.name}" in stock`);
+          throw new Error(`Só há ${item.stock} de "${item.name}" em estoque`);
         }
 
         const reserved = unwrap(await client
@@ -83,7 +95,7 @@ export function createSupabaseProvider() {
           .eq('stock', item.stock)
           .select());
         if (reserved.length === 0) {
-          throw new Error('Stock changed while saving — please try again');
+          throw new Error('O estoque mudou enquanto a venda era salva — tente novamente');
         }
 
         try {

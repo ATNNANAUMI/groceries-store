@@ -45,7 +45,7 @@ export default function Items({ items, refreshItems, lowStock }) {
   }
 
   async function handleDelete(id) {
-    if (!window.confirm('Delete this item? Past sales will remain but show as "Unknown".')) return;
+    if (!window.confirm('Excluir este produto? As vendas anteriores continuam, mas aparecem como "Desconhecido".')) return;
     setError('');
     try {
       await api.items.remove(id);
@@ -57,22 +57,22 @@ export default function Items({ items, refreshItems, lowStock }) {
   }
 
   function stockBadge(stock) {
-    if (stock === 0) return <span className="badge badge-danger">Out of stock</span>;
-    if (stock <= lowStock) return <span className="badge badge-warn">Low</span>;
+    if (stock === 0) return <span className="badge badge-danger">Sem estoque</span>;
+    if (stock <= lowStock) return <span className="badge badge-warn">Baixo</span>;
     return null;
   }
 
   return (
     <section className="card">
       <div className="card-header">
-        <h2>{editingId ? 'Edit item' : 'Add an item'}</h2>
+        <h2>{editingId ? 'Editar produto' : 'Adicionar produto'}</h2>
       </div>
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <form className="form-grid" onSubmit={handleSubmit}>
         <label className="field">
-          <span>Item name</span>
+          <span>Nome do produto</span>
           <input
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -80,7 +80,7 @@ export default function Items({ items, refreshItems, lowStock }) {
           />
         </label>
         <label className="field">
-          <span>Price</span>
+          <span>Preço</span>
           <input
             type="number"
             min="0"
@@ -91,7 +91,7 @@ export default function Items({ items, refreshItems, lowStock }) {
           />
         </label>
         <label className="field">
-          <span>Stock</span>
+          <span>Estoque</span>
           <input
             type="number"
             min="0"
@@ -103,24 +103,24 @@ export default function Items({ items, refreshItems, lowStock }) {
         </label>
         <div className="form-actions">
           <button className="btn btn-primary" type="submit" disabled={saving}>
-            {editingId ? 'Save' : 'Add item'}
+            {editingId ? 'Salvar' : 'Adicionar produto'}
           </button>
           {editingId && (
             <button className="btn" type="button" onClick={resetForm} disabled={saving}>
-              Cancel
+              Cancelar
             </button>
           )}
         </div>
       </form>
 
       <div className="card-header">
-        <h2>Catalog</h2>
-        <span className="muted">{items.length} items</span>
+        <h2>Catálogo</h2>
+        <span className="muted">{items.length} produtos</span>
       </div>
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Name</th><th className="num">Price</th><th className="num">Stock</th><th className="actions-col"></th></tr>
+            <tr><th>Nome</th><th className="num">Preço</th><th className="num">Estoque</th><th className="actions-col"></th></tr>
           </thead>
           <tbody>
             {items.map(i => (
@@ -131,13 +131,13 @@ export default function Items({ items, refreshItems, lowStock }) {
                   {stockBadge(i.stock)} {i.stock}
                 </td>
                 <td className="row-actions">
-                  <button className="btn btn-small" onClick={() => handleEdit(i)}>Edit</button>
-                  <button className="btn btn-small btn-danger" onClick={() => handleDelete(i.id)}>Delete</button>
+                  <button className="btn btn-small" onClick={() => handleEdit(i)}>Editar</button>
+                  <button className="btn btn-small btn-danger" onClick={() => handleDelete(i.id)}>Excluir</button>
                 </td>
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td colSpan={4} className="empty">No items yet — add your first product above.</td></tr>
+              <tr><td colSpan={4} className="empty">Nenhum produto ainda — adicione o primeiro acima.</td></tr>
             )}
           </tbody>
         </table>
