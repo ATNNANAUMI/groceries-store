@@ -232,6 +232,68 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Searchable picker (SearchSelect) — used instead of <select> for long lists. */
+.search-select { position: relative; min-width: 0; }
+
+.search-select input { padding-right: 32px; text-overflow: ellipsis; }
+
+.search-select::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.search-select-compact { width: 220px; }
+.search-select-compact input { width: 100%; }
+
+.search-select-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  width: max(100%, 260px);
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+
+.search-select-compact .search-select-list { left: auto; right: 0; }
+
+.search-select-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.search-select-option.active { background: var(--accent-soft); }
+.search-select-option[aria-selected="true"] { font-weight: 650; color: var(--accent); }
+.search-select-option[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.search-select-label { min-width: 0; overflow-wrap: anywhere; }
+.search-select-detail { color: var(--text-muted); font-size: 13px; white-space: nowrap; font-weight: 400; }
+.search-select-empty { padding: 8px 10px; color: var(--text-muted); font-size: 13px; }
+
+/* Search box above the Clientes / Produtos tables. */
+.search-box { width: 240px; }
+.search-box::-webkit-search-cancel-button { cursor: pointer; }
+
 /* ---------- Buttons ---------- */
 
 .btn {
@@ -427,6 +489,8 @@ tbody tr.editing { background: var(--accent-soft); }
   th:last-child, td:last-child { padding-right: 16px; }
   .tabs { align-self: stretch; }
   .pager, .pager-buttons { justify-content: center; flex-wrap: wrap; }
+  .card-header-tools { width: 100%; }
+  .search-box, .search-select-compact { flex: 1 1 100%; width: auto; }
   .tab { flex: 1; }
   .user-email { display: none; }
   .form-grid-sale { grid-template-columns: 1fr; }

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { api } from '../api';
 import { formatMoney } from '../lib/format';
+import { matchesSearch, sortByName } from '../lib/search';
 import ErrorBanner from './ErrorBanner';
 
 const EMPTY = { name: '', price: '', stock: '' };
@@ -10,6 +11,12 @@ export default function Items({ items, refreshItems, lowStock }) {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+
+  const shownItems = useMemo(
+    () => sortByName(items).filter(i => matchesSearch(search, i.name)),
+    [items, search],
+  );
 
   function resetForm() {
     setForm(EMPTY);
@@ -115,7 +122,19 @@ export default function Items({ items, refreshItems, lowStock }) {
 
       <div className="card-header">
         <h2>Catálogo</h2>
-        <span className="muted">{items.length} produtos</span>
+        <div className="card-header-tools">
+          <span className="muted">
+            {search ? `${shownItems.length} de ${items.length}` : `${items.length} produtos`}
+          </span>
+          <input
+            type="search"
+            className="select-compact search-box"
+            placeholder="Buscar produto…"
+            aria-label="Buscar produto"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
       </div>
       <div className="table-wrap">
         <table>
@@ -123,7 +142,7 @@ export default function Items({ items, refreshItems, lowStock }) {
             <tr><th>Nome</th><th className="num">Preço</th><th className="num">Estoque</th><th className="actions-col"></th></tr>
           </thead>
           <tbody>
-            {items.map(i => (
+            {shownItems.map(i => (
               <tr key={i.id} className={i.id === editingId ? 'editing' : ''}>
                 <td className="strong">{i.name}</td>
                 <td className="num">{formatMoney(i.price)}</td>
@@ -136,8 +155,12 @@ export default function Items({ items, refreshItems, lowStock }) {
                 </td>
               </tr>
             ))}
-            {items.length === 0 && (
-              <tr><td colSpan={4} className="empty">Nenhum produto ainda — adicione o primeiro acima.</td></tr>
+            {shownItems.length === 0 && (
+              <tr><td colSpan={4} className="empty">
+                {items.length === 0
+                  ? 'Nenhum produto ainda — adicione o primeiro acima.'
+                  : `Nenhum produto encontrado para "${search}".`}
+              </td></tr>
             )}
           </tbody>
         </table>

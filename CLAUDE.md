@@ -36,6 +36,7 @@ Env: copy `client/.env.example` → `client/.env`. `REACT_APP_API_PROVIDER` sele
 - Language: all UI text and user-facing error messages are Brazilian Portuguese (`pt-BR`), including messages thrown by the providers (`supabaseProvider.js` translates Supabase's English errors). Code, comments and identifiers stay in English.
 - Money: always `formatMoney()` from `src/lib/format.js` (BRL, `pt-BR`); `numeric` columns may arrive as strings, so wrap in `Number()` before math.
 - Dates: `sale_date` is a `YYYY-MM-DD` date column. Use `todayLocal()` / `formatDate()` — never `toISOString().slice(0, 10)` (UTC rolls to tomorrow in the evening for the owner's timezone).
+- Long lists (buyers, items — hundreds after the import): pick with `<SearchSelect>` instead of `<select>`, filter tables with `matchesSearch()` and order with `sortByName()` from `src/lib/search.js` (accent/case-insensitive, pt-BR order).
 - Errors are shown in the UI with `<ErrorBanner>`; a form is reset only after a successful save.
 - Styling is plain CSS with design tokens (CSS custom properties, light + dark via `prefers-color-scheme`) in `src/index.css`; component classes (`.card`, `.btn`, `.btn-primary`, `.field`, `.form-grid`, `.table-wrap`, `.badge-*`) in `src/App.css`. Reuse these instead of adding new ad-hoc styles; no CSS framework.
 - Tests mock `./api` (see `src/App.test.js`), so they never need real credentials.

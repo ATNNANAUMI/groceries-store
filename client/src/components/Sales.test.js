@@ -35,7 +35,10 @@ test('changing the buyer filter goes back to the first page', () => {
   fireEvent.click(screen.getByRole('button', { name: /próxima/i }));
   expect(screen.getByText('Página 2 de 3')).toBeInTheDocument();
 
-  fireEvent.change(screen.getByLabelText(/filtrar por cliente/i), { target: { value: 'b2' } });
+  const filter = screen.getByRole('combobox', { name: /filtrar por cliente/i });
+  fireEvent.focus(filter);
+  fireEvent.change(filter, { target: { value: 'bru' } });
+  fireEvent.click(screen.getByRole('option', { name: 'Bruno' }));
   expect(historyRows()).toHaveLength(50);
   expect(screen.queryByText(/página \d+ de/i)).not.toBeInTheDocument();  // 50 sales fit on one page
 });

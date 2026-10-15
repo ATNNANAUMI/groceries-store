@@ -2,7 +2,9 @@ import { useState, useMemo, useRef } from 'react';
 import { api } from '../api';
 import { formatMoney, formatDate, formatPercent, todayLocal } from '../lib/format';
 import { saleTotal, parseDiscount } from '../lib/sales';
+import { sortByName } from '../lib/search';
 import ErrorBanner from './ErrorBanner';
+import SearchSelect from './SearchSelect';
 
 const PAGE_SIZE = 50;
 const formatCount = n => n.toLocaleString('pt-BR');
@@ -71,6 +73,24 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
   // Imported sales without a catalog item keep the spreadsheet text in `description`.
   const itemName = sale => items.find(i => i.id === sale.item_id)?.name || sale.description || unknown;
 
+  const buyerOptions = useMemo(
+    () => sortByName(buyers).map(b => ({ value: b.id, label: b.name })),
+    [buyers],
+  );
+  const itemOptions = useMemo(
+    () => sortByName(items).map(i => ({
+      value: i.id,
+      label: i.name,
+      detail: `${formatMoney(i.price)} · ${i.stock} em estoque`,
+      disabled: i.stock === 0,
+    })),
+    [items],
+  );
+  const filterOptions = useMemo(
+    () => [{ value: '', label: 'Todos os clientes' }, ...buyerOptions],
+    [buyerOptions],
+  );
+
   const filteredSales = useMemo(() => {
     return buyerFilter ? sales.filter(s => s.buyer_id === buyerFilter) : sales;
   }, [sales, buyerFilter]);
@@ -105,32 +125,26 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
       <form className="form-grid form-grid-sale" onSubmit={handleSubmit}>
         <label className="field">
           <span>Cliente</span>
-          <select
+          <SearchSelect
+            options={buyerOptions}
             value={form.buyerId}
-            onChange={e => setForm(f => ({ ...f, buyerId: e.target.value }))}
+            onChange={buyerId => setForm(f => ({ ...f, buyerId }))}
+            placeholder="Buscar cliente…"
+            emptyText="Nenhum cliente encontrado"
             required
-          >
-            <option value="">Selecione o cliente</option>
-            {buyers.map(b => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
+          />
         </label>
 
         <label className="field">
           <span>Produto</span>
-          <select
+          <SearchSelect
+            options={itemOptions}
             value={form.itemId}
-            onChange={e => setForm(f => ({ ...f, itemId: e.target.value }))}
+            onChange={itemId => setForm(f => ({ ...f, itemId }))}
+            placeholder="Buscar produto…"
+            emptyText="Nenhum produto encontrado"
             required
-          >
-            <option value="">Selecione o produto</option>
-            {items.map(i => (
-              <option key={i.id} value={i.id} disabled={i.stock === 0}>
-                {i.name} — {formatMoney(i.price)} ({i.stock} em estoque)
-              </option>
-            ))}
-          </select>
+          />
         </label>
 
         <label className="field field-narrow">
@@ -194,17 +208,15 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         <h2>Histórico de vendas</h2>
         <div className="card-header-tools">
           <span className="muted">{formatCount(filteredSales.length)} vendas · {formatMoney(filteredTotal)}</span>
-          <select
-            className="select-compact"
+          <SearchSelect
+            options={filterOptions}
             value={buyerFilter}
-            onChange={e => { setBuyerFilter(e.target.value); setPage(0); }}
+            onChange={id => { setBuyerFilter(id); setPage(0); }}
+            placeholder="Buscar cliente…"
+            emptyText="Nenhum cliente encontrado"
             aria-label="Filtrar por cliente"
-          >
-            <option value="">Todos os clientes</option>
-            {buyers.map(b => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
+            compact
+          />
         </div>
       </div>
 
