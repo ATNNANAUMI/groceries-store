@@ -2,6 +2,7 @@
 
     python import_sales.py                      # dry run: show what would be imported
     python import_sales.py --commit             # write to Supabase (asks for the owner password)
+    python import_sales.py --check              # compare the database with what should be imported
     python import_sales.py --rollback           # delete everything this batch imported
 
 Inputs (defaults relative to the repo root):
@@ -214,10 +215,15 @@ class Supabase:
     def upsert(self, table, rows):
         for i in range(0, len(rows), BATCH_SIZE):
             chunk = rows[i:i + BATCH_SIZE]
-            r = requests.post(f'{self.url}/rest/v1/{table}?on_conflict=id', json=chunk, timeout=120,
-                              headers=self._headers({'Prefer': 'resolution=merge-duplicates,return=minimal'}))
+            try:
+                r = requests.post(f'{self.url}/rest/v1/{table}?on_conflict=id', json=chunk, timeout=120,
+                                  headers=self._headers({'Prefer': 'resolution=merge-duplicates,return=minimal'}))
+            except requests.RequestException as e:
+                sys.exit(f'\nInsert into {table} stopped at row {i} of {len(rows)}: {e}\n'
+                         'Nothing is duplicated by re-running: run --commit again to finish.')
             if r.status_code >= 300:
-                sys.exit(f'Insert into {table} failed at row {i}: {r.status_code} {r.text[:500]}')
+                sys.exit(f'\nInsert into {table} failed at row {i} of {len(rows)}: {r.status_code} {r.text[:500]}\n'
+                         'Run --commit again after fixing it; rows already written are updated, not duplicated.')
             print(f'  {table}: {min(i + BATCH_SIZE, len(rows))}/{len(rows)}', end='\r', flush=True)
         print()
 
@@ -238,6 +244,24 @@ class Supabase:
     def delete(self, table, query):
         r = requests.delete(f'{self.url}/rest/v1/{table}?{query}', headers=self._headers(), timeout=300)
         r.raise_for_status()
+
+
+def verify(db, buyers, items, sales, batch):
+    """Compare what is in the database with what this import should have written. True if complete."""
+    q = f'import_batch=eq.{batch}'
+    ok = True
+    print('\nIn the database vs. expected:')
+    for table, rows in (('buyers', buyers), ('items', items), ('sales', sales)):
+        got = db.count(table, q)
+        ok &= got >= len(rows)
+        print(f'  {table:<7} {got:>6} / {len(rows):<6} {"ok" if got >= len(rows) else "MISSING " + str(len(rows) - got)}')
+    years = collections.Counter(s['sale_date'][:4] for s in sales)
+    for year, expected in sorted(years.items()):
+        got = db.count('sales', f'{q}&sale_date=gte.{year}-01-01&sale_date=lt.{int(year) + 1}-01-01')
+        ok &= got >= expected
+        print(f'  sales {year} {got:>6} / {expected:<6} {"ok" if got >= expected else "MISSING " + str(expected - got)}')
+    print('Complete.' if ok else 'Incomplete — run --commit again; it fills in what is missing without duplicating.')
+    return ok
 
 
 def connect(args):
@@ -281,6 +305,7 @@ def main():
     p.add_argument('--email', help='owner email (or SUPABASE_EMAIL)')
     mode = p.add_mutually_exclusive_group()
     mode.add_argument('--commit', action='store_true', help='write to Supabase')
+    mode.add_argument('--check', action='store_true', help='compare the database with what should be imported')
     mode.add_argument('--rollback', action='store_true', help='delete rows of this batch from Supabase')
     p.add_argument('--force', action='store_true', help='rollback even if app-recorded sales use imported buyers/items')
     args = p.parse_args()
@@ -309,6 +334,11 @@ def main():
     items_map = read_csv(os.path.join(args.mappings, 'items.csv'))
     buyers, items, sales, missing, stats = build_rows(lines, customers, items_map, args.batch)
 
+    if args.check:
+        db = connect(args)
+        buyers, _ = reuse_existing(buyers, db.select_all('buyers', 'id,name,import_batch'), 'buyers')
+        items, _ = reuse_existing(items, db.select_all('items', 'id,name,import_batch'), 'items')
+        sys.exit(0 if verify(db, buyers, items, sales, args.batch) else 1)
     if not args.commit:
         summary(buyers, items, sales, missing, stats)
         print('\nDry run — nothing was written. Use --commit to import.')
@@ -326,7 +356,10 @@ def main():
     db.upsert('buyers', buyers)
     db.upsert('items', items)
     db.upsert('sales', sales)
-    print(f"Done. Undo with: python {os.path.relpath(__file__)} --rollback --batch {args.batch}")
+    if verify(db, buyers, items, sales, args.batch):
+        print(f"Done. Undo with: python {os.path.relpath(__file__)} --rollback --batch {args.batch}")
+    else:
+        sys.exit(1)
 
 
 if __name__ == '__main__':
