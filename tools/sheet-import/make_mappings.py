@@ -21,6 +21,11 @@ customers.csv
 items.csv
   item_name blank   the line is imported with its text as description and no catalog item
   quantity          units per line ("2 salgados" -> item Salgado, quantity 2)
+  half_portion=yes  "1/2 coca 600": half of one item, split between two people; imported as
+                    the item x1 at its regular price with the rest as discount (~50%)
+
+Re-running keeps hand edits: the auto_* columns hold what the generator wrote, and a value
+that differs from them is yours. Don't edit the auto_* columns.
 """
 import collections
 import csv
@@ -44,6 +49,7 @@ ITEM_SYNONYMS = {
     'Almoço': ['almoco'],
     'Janta': ['janta', 'jantar'],
     'Suco': ['suco'],
+    'Suco 1L': ['suco grande', 'suco 1l', 'suco 1 l', 'suco l', 'suco litro', 'suco 1 litro', 'suco g'],
     'Cookie': ['cookie'],
     'Monster': ['monster'],
     'Toddynho': ['toddynho', 'todinho', 'toddy'],
@@ -52,8 +58,9 @@ ITEM_SYNONYMS = {
     'Esfiha': ['esfiha', 'esfirra', 'esfiha'],
     'Trident': ['trident'],
     'Trento': ['trento'],
-    'Coca-Cola 600ml': ['coca 600', 'coca 600ml'],
-    'Coca-Cola 2L': ['coca 2 l', 'coca 2l', 'coca 2 litro'],
+    'Coca-Cola 600ml': ['coca 600', 'coca 600ml', 'coca600', 'coca 600 ml'],
+    'Coca-Cola 2L': ['coca 2 l', 'coca 2l', 'coca 2 litro', 'coca2l', 'coca2 l'],
+    'Refrigerante 2L': ['refri 2 l', 'refri 2l', 'refri2l', 'refrigerante 2l', 'refrigerante 2 l'],
     'Café': ['cafe'],
     'Pastel': ['pastel'],
     'Croissant': ['croissant'],
@@ -240,8 +247,14 @@ def add_suggestions(rows):
 
 # ---------- items ----------
 
+HALF = re.compile(r'^1\s*/\s*2\s*')  # "1/2 coca 600", "1/2coca 2 l": one item split between two people
+
+
 def parse_label(label):
+    """(base, quantity, half): "2 salgados" -> ("salgados", 2, False), "1/2 coca 600" -> ("coca 600", 1, True)."""
     s = ascii_lower(label)
+    half = bool(HALF.match(s))
+    s = HALF.sub('', s)
     s = re.sub(r'\([^)]*\)', ' ', s)  # notes: "salgado (ney)", "(ney)2 salgado"
     s = re.sub(r'[^a-z0-9 ]', ' ', s)
     s = re.sub(r'\s+', ' ', s).strip()
@@ -253,7 +266,7 @@ def parse_label(label):
         m = re.match(r'^([a-z][a-z ]*?)\s*x?\s*([1-9])$', s)   # "salgado 2", "salgado x2"
         if m:
             s, qty = m.group(1).strip(), int(m.group(2))
-    return s, qty
+    return s, qty, half
 
 
 def canonical_item(base):
@@ -272,13 +285,13 @@ def item_rows(lines):
     base_count = collections.Counter()
     parsed = {}
     for label, ls in by_label.items():
-        base, qty = parse_label(label)
-        parsed[label] = (base, qty)
+        base, qty, half = parse_label(label)
+        parsed[label] = (base, qty, half)
         base_count[base] += len(ls)
 
     rows = []
     for label, ls in by_label.items():
-        base, qty = parsed[label]
+        base, qty, half = parsed[label]
         name = canonical_item(base)
         status = 'mapped'
         if not name and base_count[base] >= 5 and base:
@@ -289,7 +302,7 @@ def item_rows(lines):
         rows.append({
             'sheet_label': label, 'lines': len(ls), 'example': ls[0]['label'],
             'median_amount': round(statistics.median(float(l['amount']) for l in recent), 2),
-            'item_name': name, 'quantity': qty, 'status': status,
+            'item_name': name, 'quantity': qty, 'half_portion': 'yes' if half else '', 'status': status,
         })
     rows.sort(key=lambda r: (-r['lines'], r['sheet_label']))
     return rows
@@ -298,15 +311,27 @@ def item_rows(lines):
 # ---------- io ----------
 
 def merge_with_existing(path, rows, key, editable):
+    """Keep hand edits from the previous file; everything else takes this run's values.
+
+    Each editable column is also written as auto_<col>, the value the generator produced, so a
+    hand edit is a value that differs from it. (Older files without auto_<col>: any value that
+    differs from this run counts as an edit.) Returns the set of keys with hand edits."""
+    for r in rows:
+        for col in editable:
+            r[f'auto_{col}'] = r[col]
+    edited = set()
     if os.path.exists(path):
         with open(path, encoding='utf-8') as f:
             old = {r[key]: r for r in csv.DictReader(f)}
         for r in rows:
-            if r[key] in old:
-                for col in editable:
-                    if col in old[r[key]]:
-                        r[col] = old[r[key]][col]
-    return rows
+            o = old.get(r[key])
+            if not o:
+                continue
+            for col in editable:
+                if col in o and o[col] != o.get(f'auto_{col}', r[col]):
+                    r[col] = o[col]
+                    edited.add(r[key])
+    return edited
 
 
 def write_csv(path, rows):
@@ -323,14 +348,17 @@ def main(lines_path, out_dir):
 
     cpath = os.path.join(out_dir, 'customers.csv')
     customers = customer_rows(lines)
-    generated = {r['sheet_name']: r['buyer_name'] for r in customers}
-    customers = merge_with_existing(cpath, customers, 'sheet_name', ['buyer_name'])
+    edited = merge_with_existing(cpath, customers, 'sheet_name', ['buyer_name'])
     for r in customers:
-        if r['buyer_name'] != generated[r['sheet_name']]:
+        if r['sheet_name'] in edited:
             r['status'] = 'edited'
     write_csv(cpath, add_suggestions(customers))
     ipath = os.path.join(out_dir, 'items.csv')
-    items = merge_with_existing(ipath, item_rows(lines), 'sheet_label', ['item_name', 'quantity', 'status'])
+    items = item_rows(lines)
+    edited = merge_with_existing(ipath, items, 'sheet_label', ['item_name', 'quantity', 'half_portion'])
+    for r in items:
+        if r['sheet_label'] in edited:
+            r['status'] = 'edited'
     write_csv(ipath, items)
 
     st = collections.Counter(r['status'] for r in customers)
