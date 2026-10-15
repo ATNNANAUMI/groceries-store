@@ -47,6 +47,13 @@ export function createRestProvider() {
     return data;
   }
 
+  // Query string from an object, skipping empty values.
+  function query(params) {
+    return new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+    ).toString();
+  }
+
   function crud(resource) {
     return {
       list: () => request('GET', `/${resource}`),
@@ -88,7 +95,14 @@ export function createRestProvider() {
     items: crud('items'),
 
     sales: {
-      list: sales.list,
+      page: ({ buyerId, offset = 0, limit = 50 } = {}) =>
+        request('GET', `/sales?${query({ offset, limit, buyer_id: buyerId })}`),
+      countAfter: async ({ date, buyerId }) =>
+        (await request('GET', `/sales/count?${query({ after: date, buyer_id: buyerId })}`)).count,
+      summary: async ({ buyerId } = {}) => {
+        const { count, total } = await request('GET', `/sales/summary?${query({ buyer_id: buyerId })}`);
+        return { count: Number(count), total: Number(total) };
+      },
       remove: sales.remove,
       create: ({ buyerId, itemId, quantity, saleDate, discount = 0 }) =>
         sales.create({ buyer_id: buyerId, item_id: itemId, quantity, discount, sale_date: saleDate }),

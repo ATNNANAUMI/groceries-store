@@ -22,7 +22,8 @@ function App() {
 
   const [buyers, setBuyers] = useState([]);
   const [items, setItems] = useState([]);
-  const [sales, setSales] = useState([]);
+  // Only the totals are kept here; the Vendas tab loads the history page by page.
+  const [salesSummary, setSalesSummary] = useState({ count: 0, total: 0 });
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [tab, setTab] = useState('sales');
@@ -39,7 +40,7 @@ function App() {
 
   const refreshBuyers = useCallback(async () => setBuyers(await api.buyers.list()), []);
   const refreshItems = useCallback(async () => setItems(await api.items.list()), []);
-  const refreshSales = useCallback(async () => setSales(await api.sales.list()), []);
+  const refreshSales = useCallback(async () => setSalesSummary(await api.sales.summary()), []);
 
   const loadAll = useCallback(async () => {
     setDataLoading(true);
@@ -76,7 +77,6 @@ function App() {
     return <Login />;
   }
 
-  const totalRevenue = sales.reduce((sum, s) => sum + Number(s.total), 0);
   const lowStock = items.filter(i => i.stock <= LOW_STOCK).length;
 
   return (
@@ -105,11 +105,11 @@ function App() {
         <section className="stats" aria-label="Resumo">
           <div className="stat stat-accent">
             <span className="stat-label">Faturamento</span>
-            <span className="stat-value">{formatMoney(totalRevenue)}</span>
+            <span className="stat-value">{formatMoney(salesSummary.total)}</span>
           </div>
           <div className="stat">
             <span className="stat-label">Vendas</span>
-            <span className="stat-value">{sales.length}</span>
+            <span className="stat-value">{salesSummary.count.toLocaleString('pt-BR')}</span>
           </div>
           <div className="stat">
             <span className="stat-label">Clientes</span>
@@ -142,7 +142,7 @@ function App() {
           <>
             {tab === 'sales' && (
               <Sales
-                sales={sales}
+                summary={salesSummary}
                 buyers={buyers}
                 items={items}
                 refreshSales={refreshSales}

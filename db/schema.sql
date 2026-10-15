@@ -41,6 +41,22 @@ create index if not exists sales_buyer_id_idx on sales (buyer_id);
 create index if not exists sales_sale_date_idx on sales (sale_date desc, created_at desc);
 create index if not exists sales_import_batch_idx on sales (import_batch) where import_batch is not null;
 
+-- Index matching the sales history order (api.sales.page), so jumping to a late page stays fast.
+create index if not exists sales_history_idx on sales (sale_date desc, sold_at desc nulls last, created_at desc, id);
+
+-- Number of sales and their total, optionally for one buyer, so the site can show the totals
+-- without downloading every sale. SECURITY INVOKER: runs with the caller's rights, so row
+-- level security on `sales` still applies.
+create or replace function sales_summary(p_buyer_id uuid default null)
+returns table (sales_count bigint, sales_total numeric)
+language sql stable security invoker
+set search_path = public
+as $$
+  select count(*), coalesce(sum(total), 0)
+  from sales
+  where p_buyer_id is null or buyer_id = p_buyer_id
+$$;
+
 -- Owner accounts for the self-hosted server (Supabase uses its own auth.users).
 create table if not exists users (
   id            uuid primary key default gen_random_uuid(),

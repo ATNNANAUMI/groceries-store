@@ -14,3 +14,7 @@ create policy "Allow authenticated full access" on items for all
 
 create policy "Allow authenticated full access" on sales for all
   using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- Functions: callable only by logged-in users (see db/schema.sql).
+revoke execute on function sales_summary(uuid) from public, anon;
+grant execute on function sales_summary(uuid) to authenticated;

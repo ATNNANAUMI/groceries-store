@@ -363,6 +363,7 @@ th:last-child, td:last-child { padding-right: 20px; }
 
 tbody tr:hover { background: var(--surface-2); }
 tbody tr.editing { background: var(--accent-soft); }
+tbody tr.highlight { background: var(--warn-soft); }
 
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .strong { font-weight: 600; }
@@ -388,12 +389,33 @@ tbody tr.editing { background: var(--accent-soft); }
 .pager-buttons { display: flex; align-items: center; gap: 6px; }
 
 .pager-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 0 8px;
   font-size: 13px;
   color: var(--text-muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+.pager-input {
+  width: 64px;
+  height: 30px;
+  padding: 0 6px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.pager-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+
+.date-jump { width: 150px; }
+
+/* A new page is loading: keep the old rows visible but faded. */
+.table-wrap.is-loading { opacity: 0.55; transition: opacity 0.15s; }
 
 .empty {
   text-align: center;
@@ -491,6 +513,7 @@ tbody tr.editing { background: var(--accent-soft); }
   .pager, .pager-buttons { justify-content: center; flex-wrap: wrap; }
   .card-header-tools { width: 100%; }
   .search-box, .search-select-compact { flex: 1 1 100%; width: auto; }
+  .date-jump { flex: 1 1 100%; width: auto; }
   .tab { flex: 1; }
   .user-email { display: none; }
   .form-grid-sale { grid-template-columns: 1fr; }
