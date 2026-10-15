@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { api } from '../api';
-import { formatMoney, formatDate, todayLocal } from '../lib/format';
+import { formatMoney, formatDate, formatPercent, todayLocal } from '../lib/format';
+import { saleTotal, parseDiscount } from '../lib/sales';
 import ErrorBanner from './ErrorBanner';
 
 export default function Sales({ sales, buyers, items, refreshSales, refreshItems }) {
@@ -8,6 +9,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
     buyerId: '',
     itemId: '',
     quantity: 1,
+    discount: '',
     date: todayLocal(),
   });
   const [buyerFilter, setBuyerFilter] = useState('');
@@ -17,10 +19,12 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
   const selectedItem = items.find(i => i.id === form.itemId);
   const qty = parseInt(form.quantity, 10) || 0;
   const overStock = selectedItem && qty > selectedItem.stock;
+  const discount = parseDiscount(form.discount);
+  const badDiscount = Number.isNaN(discount);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.buyerId || !selectedItem || qty < 1 || overStock) return;
+    if (!form.buyerId || !selectedItem || qty < 1 || overStock || badDiscount) return;
     setSaving(true);
     setError('');
 
@@ -29,9 +33,10 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         buyerId: form.buyerId,
         itemId: form.itemId,
         quantity: qty,
+        discount,
         saleDate: form.date,
       });
-      setForm(f => ({ ...f, itemId: '', quantity: 1 }));
+      setForm(f => ({ ...f, itemId: '', quantity: 1, discount: '' }));
     } catch (err) {
       setError(err.message);
     }
@@ -57,7 +62,8 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
 
   const unknown = <span className="muted">Unknown</span>;
   const buyerName = id => buyers.find(b => b.id === id)?.name || unknown;
-  const itemName = id => items.find(i => i.id === id)?.name || unknown;
+  // Imported sales without a catalog item keep the spreadsheet text in `description`.
+  const itemName = sale => items.find(i => i.id === sale.item_id)?.name || sale.description || unknown;
 
   const filteredSales = useMemo(() => {
     return buyerFilter ? sales.filter(s => s.buyer_id === buyerFilter) : sales;
@@ -125,6 +131,21 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
           />
         </label>
 
+        <label className="field field-narrow">
+          <span>Discount %</span>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="any"
+            inputMode="decimal"
+            placeholder="0"
+            value={form.discount}
+            onChange={e => setForm(f => ({ ...f, discount: e.target.value }))}
+            aria-invalid={badDiscount || undefined}
+          />
+        </label>
+
         <label className="field">
           <span>Date</span>
           <input
@@ -138,14 +159,17 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
         <div className="form-actions">
           <div className="sale-total">
             <span className="muted">Total</span>
-            <strong>{formatMoney(selectedItem ? Number(selectedItem.price) * qty : 0)}</strong>
+            <strong>{formatMoney(selectedItem && !badDiscount ? saleTotal(selectedItem.price, qty, discount) : 0)}</strong>
           </div>
-          <button className="btn btn-primary" type="submit" disabled={saving || overStock}>
+          <button className="btn btn-primary" type="submit" disabled={saving || overStock || badDiscount}>
             {saving ? 'Saving…' : 'Record sale'}
           </button>
         </div>
         {overStock && (
           <p className="field-error form-full">Only {selectedItem.stock} in stock.</p>
+        )}
+        {badDiscount && (
+          <p className="field-error form-full">Discount must be between 0 and 100%.</p>
         )}
       </form>
 
@@ -172,7 +196,8 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
           <thead>
             <tr>
               <th>Date</th><th>Buyer</th><th>Item</th>
-              <th className="num">Qty</th><th className="num">Total</th><th className="actions-col"></th>
+              <th className="num">Qty</th><th className="num">Price</th><th className="num">Disc.</th>
+              <th className="num">Total</th><th className="actions-col"></th>
             </tr>
           </thead>
           <tbody>
@@ -180,8 +205,10 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
               <tr key={s.id}>
                 <td className="nowrap">{formatDate(s.sale_date)}</td>
                 <td className="strong">{buyerName(s.buyer_id)}</td>
-                <td>{itemName(s.item_id)}</td>
+                <td>{itemName(s)}</td>
                 <td className="num">{s.quantity}</td>
+                <td className="num">{formatMoney(s.unit_price)}</td>
+                <td className="num">{Number(s.discount) > 0 ? formatPercent(s.discount) : ''}</td>
                 <td className="num strong">{formatMoney(s.total)}</td>
                 <td className="row-actions">
                   <button className="btn btn-small btn-danger" onClick={() => handleDelete(s.id)}>Delete</button>
@@ -189,7 +216,7 @@ export default function Sales({ sales, buyers, items, refreshSales, refreshItems
               </tr>
             ))}
             {filteredSales.length === 0 && (
-              <tr><td colSpan={6} className="empty">No sales recorded yet.</td></tr>
+              <tr><td colSpan={8} className="empty">No sales recorded yet.</td></tr>
             )}
           </tbody>
         </table>

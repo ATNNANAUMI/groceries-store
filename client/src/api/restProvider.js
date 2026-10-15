@@ -88,8 +88,8 @@ export function createRestProvider() {
     sales: {
       list: sales.list,
       remove: sales.remove,
-      create: ({ buyerId, itemId, quantity, saleDate }) =>
-        sales.create({ buyer_id: buyerId, item_id: itemId, quantity, sale_date: saleDate }),
+      create: ({ buyerId, itemId, quantity, saleDate, discount = 0 }) =>
+        sales.create({ buyer_id: buyerId, item_id: itemId, quantity, discount, sale_date: saleDate }),
     },
   };
 }

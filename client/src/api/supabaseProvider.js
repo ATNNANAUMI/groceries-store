@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { saleTotal, parseDiscount } from '../lib/sales';
 
 function unwrap({ data, error }) {
   if (error) throw new Error(error.message);
@@ -9,12 +10,20 @@ function toSession(session) {
   return session ? { user: { id: session.user.id, email: session.user.email } } : null;
 }
 
+// Supabase caps a response at 1000 rows by default, so lists are fetched page by page.
+const PAGE_SIZE = 1000;
+
 function crud(client, table, order) {
   return {
     list: async () => {
-      let query = client.from(table).select('*');
-      for (const [column, ascending] of order) query = query.order(column, { ascending });
-      return unwrap(await query);
+      const rows = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        let query = client.from(table).select('*');
+        for (const [column, ascending] of order) query = query.order(column, { ascending, nullsFirst: false });
+        const page = unwrap(await query.order('id').range(from, from + PAGE_SIZE - 1));
+        rows.push(...page);
+        if (page.length < PAGE_SIZE) return rows;
+      }
     },
     create: async row => unwrap(await client.from(table).insert(row).select().single()),
     update: async (id, row) => unwrap(await client.from(table).update(row).eq('id', id).select().single()),
@@ -30,7 +39,7 @@ export function createSupabaseProvider() {
   }
   const client = createClient(url, key);
 
-  const sales = crud(client, 'sales', [['sale_date', false], ['created_at', false]]);
+  const sales = crud(client, 'sales', [['sale_date', false], ['sold_at', false], ['created_at', false]]);
 
   return {
     auth: {
@@ -59,7 +68,9 @@ export function createSupabaseProvider() {
       // else changed the stock meanwhile), then inserts the sale and rolls the
       // stock back if the insert fails. The REST server does this in one
       // SQL transaction instead.
-      create: async ({ buyerId, itemId, quantity, saleDate }) => {
+      create: async ({ buyerId, itemId, quantity, saleDate, discount = 0 }) => {
+        const pct = parseDiscount(discount);
+        if (Number.isNaN(pct)) throw new Error('Discount must be between 0 and 100%');
         const item = unwrap(await client.from('items').select('*').eq('id', itemId).single());
         if (quantity > item.stock) {
           throw new Error(`Only ${item.stock} of "${item.name}" in stock`);
@@ -80,7 +91,9 @@ export function createSupabaseProvider() {
             buyer_id: buyerId,
             item_id: itemId,
             quantity,
-            total: Number(item.price) * quantity,
+            unit_price: item.price,
+            discount: pct,
+            total: saleTotal(item.price, quantity, pct),
             sale_date: saleDate,
           });
         } catch (err) {
